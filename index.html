@@ -10,56 +10,31 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <style>
   :root {
-    --bg-primary: #ffffff;
-    --bg-secondary: #f5f5f3;
-    --bg-tertiary: #eeede9;
-    --text-primary: #1a1a18;
-    --text-secondary: #6b6b67;
-    --text-tertiary: #9b9b97;
-    --border-light: rgba(0,0,0,0.12);
-    --border-mid: rgba(0,0,0,0.22);
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --blue: #185FA5;
-    --blue-dark: #0C447C;
-    --green: #3B6D11;
-    --amber: #854F0B;
-    --red: #E24B4A;
+    --bg-primary: #ffffff; --bg-secondary: #f5f5f3; --bg-tertiary: #eeede9;
+    --text-primary: #1a1a18; --text-secondary: #6b6b67; --text-tertiary: #9b9b97;
+    --border-light: rgba(0,0,0,0.12); --border-mid: rgba(0,0,0,0.22);
+    --radius-md: 8px; --radius-lg: 12px;
+    --blue: #185FA5; --blue-dark: #0C447C; --green: #3B6D11;
+    --amber: #854F0B; --red: #E24B4A;
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-mono: 'SF Mono', 'Fira Code', monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg-primary: #1e1e1c;
-      --bg-secondary: #2a2a28;
-      --bg-tertiary: #323230;
-      --text-primary: #f0efea;
-      --text-secondary: #a0a09a;
-      --text-tertiary: #6b6b67;
-      --border-light: rgba(255,255,255,0.1);
-      --border-mid: rgba(255,255,255,0.2);
+      --bg-primary: #1e1e1c; --bg-secondary: #2a2a28; --bg-tertiary: #323230;
+      --text-primary: #f0efea; --text-secondary: #a0a09a; --text-tertiary: #6b6b67;
+      --border-light: rgba(255,255,255,0.1); --border-mid: rgba(255,255,255,0.2);
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; font-family: var(--font); background: var(--bg-primary); color: var(--text-primary); }
   #app { display: flex; flex-direction: column; height: 100vh; }
-
   #toolbar {
     display: flex; align-items: center; gap: 8px; padding: 10px 14px;
-    border-bottom: 0.5px solid var(--border-light);
-    background: var(--bg-primary); flex-wrap: wrap; flex-shrink: 0;
+    border-bottom: 0.5px solid var(--border-light); background: var(--bg-primary);
+    flex-wrap: wrap; flex-shrink: 0;
   }
-  #drop-zone {
-    display: flex; align-items: center; gap: 7px; padding: 6px 13px;
-    border: 0.5px dashed var(--border-mid); border-radius: var(--radius-md);
-    cursor: pointer; font-size: 13px; color: var(--text-secondary);
-    transition: background 0.15s; user-select: none;
-  }
-  #drop-zone:hover, #drop-zone.drag-over {
-    background: var(--bg-secondary); color: var(--text-primary);
-  }
-  #file-input { display: none; }
-  .filter-group { display: flex; gap: 5px; flex-wrap: wrap; }
+  .tb-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .filter-btn {
     font-size: 12px; padding: 4px 10px; border-radius: 20px;
     border: 0.5px solid var(--border-mid); background: var(--bg-primary);
@@ -70,7 +45,6 @@
   .filter-btn[data-brand="mosquito"].active { background: var(--blue); }
   .filter-btn[data-brand="lawn"].active { background: var(--green); }
   .filter-btn[data-brand="newage"].active { background: var(--amber); }
-
   .toolbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
   #stats { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
   .toggle-used {
@@ -79,86 +53,79 @@
     color: var(--text-secondary); cursor: pointer; font-family: var(--font);
   }
   .toggle-used.active { background: var(--bg-secondary); color: var(--text-primary); }
-
   .icon-btn {
-    display: flex; align-items: center; gap: 5px; font-size: 12px;
-    padding: 5px 10px; border-radius: var(--radius-md);
-    border: 0.5px solid var(--border-mid); background: var(--bg-primary);
-    color: var(--text-secondary); cursor: pointer; font-family: var(--font);
-    transition: background 0.15s; white-space: nowrap;
+    display: flex; align-items: center; gap: 5px; font-size: 12px; padding: 5px 10px;
+    border-radius: var(--radius-md); border: 0.5px solid var(--border-mid);
+    background: var(--bg-primary); color: var(--text-secondary); cursor: pointer;
+    font-family: var(--font); transition: background 0.15s; white-space: nowrap;
   }
   .icon-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
   .icon-btn i { font-size: 14px; }
-
-  #manual-panel {
-    display: none; border-bottom: 0.5px solid var(--border-light);
-    background: var(--bg-secondary); flex-shrink: 0;
+  .icon-btn.primary { background: var(--blue); color: #fff; border-color: transparent; }
+  .icon-btn.primary:hover { background: var(--blue-dark); }
+  #setup-banner {
+    display: none; padding: 10px 16px; background: #FFF8E6;
+    border-bottom: 0.5px solid #F0C84A; font-size: 13px; color: #5a4200;
+    align-items: center; gap: 10px; flex-shrink: 0;
   }
-  #manual-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 14px; cursor: pointer;
+  #setup-banner a { color: var(--blue); font-weight: 500; cursor: pointer; }
+  #config-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    z-index: 3000; align-items: center; justify-content: center;
   }
+  #config-modal {
+    background: var(--bg-primary); border-radius: var(--radius-lg);
+    border: 0.5px solid var(--border-mid); padding: 24px; width: 460px; max-width: 90vw;
+  }
+  #config-modal h2 { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
+  #config-modal p { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6; }
+  #config-modal label { font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 5px; }
+  #config-modal input {
+    width: 100%; font-size: 13px; padding: 7px 10px; border-radius: var(--radius-md);
+    border: 0.5px solid var(--border-mid); background: var(--bg-primary);
+    color: var(--text-primary); font-family: var(--font); margin-bottom: 14px;
+  }
+  #config-modal input:focus { outline: none; border-color: var(--blue); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn-cancel { font-size: 13px; padding: 7px 16px; border-radius: var(--radius-md); border: 0.5px solid var(--border-mid); background: var(--bg-primary); color: var(--text-secondary); cursor: pointer; font-family: var(--font); }
+  .btn-save { font-size: 13px; padding: 7px 16px; border-radius: var(--radius-md); background: var(--blue); color: #fff; border: none; cursor: pointer; font-family: var(--font); }
+  .btn-save:hover { background: var(--blue-dark); }
+  #manual-panel { display: none; border-bottom: 0.5px solid var(--border-light); background: var(--bg-secondary); flex-shrink: 0; }
+  #manual-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; cursor: pointer; }
   #manual-header-left { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
-  #manual-badge {
-    background: var(--red); color: #fff; font-size: 11px; font-weight: 500;
-    padding: 1px 7px; border-radius: 10px;
-  }
+  #manual-badge { background: var(--red); color: #fff; font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 10px; }
   #manual-collapse-btn { background: none; border: none; cursor: pointer; color: var(--text-secondary); font-size: 14px; }
   #manual-body { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
-  .manual-row {
-    display: grid; grid-template-columns: 1fr 2fr auto auto; gap: 8px; align-items: center;
-    padding: 8px 10px; background: var(--bg-primary);
-    border: 0.5px solid var(--border-light); border-radius: var(--radius-md);
-  }
+  .manual-row { display: grid; grid-template-columns: 1fr 2fr auto auto; gap: 8px; align-items: center; padding: 8px 10px; background: var(--bg-primary); border: 0.5px solid var(--border-light); border-radius: var(--radius-md); }
   .manual-filename { font-size: 12px; color: var(--text-secondary); word-break: break-all; }
   .manual-addr-wrap { position: relative; }
-  .manual-addr {
-    width: 100%; font-size: 13px; padding: 5px 8px;
-    border-radius: var(--radius-md); border: 0.5px solid var(--border-mid);
-    background: var(--bg-primary); color: var(--text-primary); font-family: var(--font);
-  }
+  .manual-addr { width: 100%; font-size: 13px; padding: 5px 8px; border-radius: var(--radius-md); border: 0.5px solid var(--border-mid); background: var(--bg-primary); color: var(--text-primary); font-family: var(--font); }
   .manual-addr:focus { outline: none; border-color: var(--blue); }
-  .suggestions {
-    position: absolute; top: 100%; left: 0; right: 0; z-index: 2000;
-    background: var(--bg-primary); border: 0.5px solid var(--border-mid);
-    border-radius: var(--radius-md); margin-top: 2px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-height: 160px; overflow-y: auto;
-  }
-  .suggestion-item {
-    padding: 7px 10px; font-size: 12px; color: var(--text-primary);
-    cursor: pointer; border-bottom: 0.5px solid var(--border-light);
-  }
+  .suggestions { position: absolute; top: 100%; left: 0; right: 0; z-index: 2000; background: var(--bg-primary); border: 0.5px solid var(--border-mid); border-radius: var(--radius-md); margin-top: 2px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-height: 160px; overflow-y: auto; }
+  .suggestion-item { padding: 7px 10px; font-size: 12px; color: var(--text-primary); cursor: pointer; border-bottom: 0.5px solid var(--border-light); }
   .suggestion-item:last-child { border-bottom: none; }
   .suggestion-item:hover { background: var(--bg-secondary); }
-  .brand-select {
-    font-size: 12px; padding: 5px 6px; border-radius: var(--radius-md);
-    border: 0.5px solid var(--border-mid); background: var(--bg-primary);
-    color: var(--text-primary); cursor: pointer; font-family: var(--font);
-  }
-  .pin-btn {
-    font-size: 12px; padding: 5px 12px; border-radius: var(--radius-md);
-    background: var(--blue); color: #fff; border: none; cursor: pointer;
-    font-family: var(--font); white-space: nowrap; transition: background 0.15s;
-  }
+  .brand-select { font-size: 12px; padding: 5px 6px; border-radius: var(--radius-md); border: 0.5px solid var(--border-mid); background: var(--bg-primary); color: var(--text-primary); cursor: pointer; font-family: var(--font); }
+  .pin-btn { font-size: 12px; padding: 5px 12px; border-radius: var(--radius-md); background: var(--blue); color: #fff; border: none; cursor: pointer; font-family: var(--font); white-space: nowrap; }
   .pin-btn:hover { background: var(--blue-dark); }
   .pin-btn:disabled { background: var(--bg-tertiary); color: var(--text-tertiary); cursor: default; }
-
   #map-container { flex: 1; position: relative; min-height: 0; }
   #map { width: 100%; height: 100%; }
-  #no-photos {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    text-align: center; pointer-events: none; z-index: 500;
-  }
+  #no-photos { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; pointer-events: none; z-index: 500; }
   #no-photos i { font-size: 40px; color: var(--text-tertiary); }
   #no-photos p { font-size: 14px; color: var(--text-secondary); margin-top: 8px; }
-
-  /* Popup */
-  .popup-wrap { font-family: var(--font); width: 220px; }
-  .popup-img { width: 100%; height: 130px; object-fit: cover; border-radius: 6px; display: block; margin-bottom: 8px; }
+  #no-photos small { font-size: 12px; color: var(--text-tertiary); display: block; margin-top: 4px; }
+  #loading-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 4000; align-items: center; justify-content: center; }
+  #loading-box { background: var(--bg-primary); border-radius: var(--radius-lg); padding: 24px 32px; text-align: center; border: 0.5px solid var(--border-mid); min-width: 200px; }
+  #loading-box p { font-size: 14px; color: var(--text-secondary); margin-top: 10px; }
+  .spinner { width: 28px; height: 28px; border: 2.5px solid var(--border-light); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .popup-wrap { font-family: var(--font); width: 230px; }
+  .popup-img { width: 100%; height: 130px; object-fit: cover; border-radius: 6px; display: block; margin-bottom: 8px; cursor: zoom-in; }
   .popup-name { font-size: 12px; font-weight: 500; color: #1a1a18; word-break: break-all; margin-bottom: 5px; }
   .popup-badges { margin-bottom: 6px; }
   .popup-brand-badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 10px; color: #fff; font-weight: 500; }
-  .popup-manual-tag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 10px; margin-left: 4px; background: #eeede9; color: #6b6b67; border: 0.5px solid rgba(0,0,0,0.12); }
+  .popup-source-tag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 10px; margin-left: 4px; background: #eeede9; color: #6b6b67; border: 0.5px solid rgba(0,0,0,0.12); }
   .popup-coords { font-size: 10px; color: #9b9b97; font-family: var(--font-mono); margin-bottom: 8px; }
   .popup-actions { display: flex; gap: 6px; }
   .popup-actions button { flex: 1; font-size: 12px; padding: 5px 8px; border-radius: 6px; cursor: pointer; border: none; font-family: var(--font); }
@@ -168,55 +135,50 @@
   .btn-remove:hover { background: #eeede9; }
   .btn-undo { background: #f5f5f3; color: #6b6b67; border: 0.5px solid rgba(0,0,0,0.15) !important; width: 100%; }
   .btn-undo:hover { background: #eeede9; }
-
-  /* Toast */
-  .toast {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    background: #2a2a28; color: #f0efea; padding: 9px 18px;
-    border-radius: var(--radius-md); font-size: 13px; z-index: 9999;
-    pointer-events: none; opacity: 1; transition: opacity 0.4s;
-  }
+  .btn-download { display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; margin-top: 6px; background: #f5f5f3; color: #6b6b67; border: 0.5px solid rgba(0,0,0,0.15); font-size: 12px; padding: 5px 8px; border-radius: 6px; font-family: var(--font); cursor: pointer; text-decoration: none; }
+  .btn-download:hover { background: #eeede9; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #2a2a28; color: #f0efea; padding: 9px 18px; border-radius: var(--radius-md); font-size: 13px; z-index: 9999; pointer-events: none; opacity: 1; transition: opacity 0.4s; }
   .toast.fade { opacity: 0; }
+  #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 5000; align-items: center; justify-content: center; cursor: zoom-out; }
+  #lightbox img { max-width: 92vw; max-height: 92vh; border-radius: var(--radius-md); object-fit: contain; }
 </style>
 </head>
 <body>
 <div id="app">
   <div id="toolbar">
-    <div id="drop-zone" onclick="document.getElementById('file-input').click()">
-      <i class="ti ti-photo-up"></i>
-      Drop photos or click to upload
-    </div>
-    <input type="file" id="file-input" multiple accept="image/*">
-
-    <div class="filter-group">
+    <button class="icon-btn primary" id="drive-btn" onclick="openDrivePicker()">
+      <i class="ti ti-brand-google-drive"></i> Add from Drive
+    </button>
+    <div class="tb-group">
       <button class="filter-btn active" data-brand="all">All</button>
       <button class="filter-btn" data-brand="mosquito">Mosquito Squad</button>
       <button class="filter-btn" data-brand="lawn">Lawn Squad</button>
       <button class="filter-btn" data-brand="newage">New Age Lights</button>
     </div>
-
-    <button class="toggle-used" id="toggle-used-btn">Show used</button>
-
     <div class="toolbar-right">
+      <button class="toggle-used" id="toggle-used-btn">Show used</button>
       <span id="stats">0 unused · 0 used</span>
       <button class="icon-btn" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
       <label class="icon-btn" style="cursor:pointer">
-        <i class="ti ti-upload"></i> Import CSV
+        <i class="ti ti-file-import"></i> Import CSV
         <input type="file" id="csv-input" accept=".csv" style="display:none">
       </label>
+      <button class="icon-btn" onclick="showConfig()"><i class="ti ti-settings"></i></button>
     </div>
+  </div>
+
+  <div id="setup-banner">
+    <i class="ti ti-alert-circle" style="font-size:16px;flex-shrink:0"></i>
+    <span>Google Drive picker needs a Client ID. Click <a onclick="showConfig()">Settings</a> to add yours — one-time setup, about 10 minutes.</span>
   </div>
 
   <div id="manual-panel">
     <div id="manual-header">
       <div id="manual-header-left">
-        <i class="ti ti-map-pin-exclamation" style="color: var(--red); font-size:16px"></i>
-        Photos missing GPS
-        <span id="manual-badge">0</span>
+        <i class="ti ti-map-pin-exclamation" style="color:var(--red);font-size:16px"></i>
+        Photos missing GPS <span id="manual-badge">0</span>
       </div>
-      <button id="manual-collapse-btn">
-        <i class="ti ti-chevron-up" id="collapse-icon"></i>
-      </button>
+      <button id="manual-collapse-btn"><i class="ti ti-chevron-up" id="collapse-icon"></i></button>
     </div>
     <div id="manual-body"></div>
   </div>
@@ -224,52 +186,102 @@
   <div id="map-container">
     <div id="no-photos">
       <i class="ti ti-map-pin-off"></i>
-      <p>Drop tech photos here to start mapping</p>
+      <p>Add photos from Drive to start mapping</p>
+      <small>Pins are placed by GPS from photo EXIF data</small>
     </div>
     <div id="map"></div>
   </div>
 </div>
 
+<div id="config-overlay" onclick="if(event.target===this)hideConfig()">
+  <div id="config-modal">
+    <h2>Google Drive setup</h2>
+    <p>Add your Google OAuth Client ID to enable the Drive picker. One-time setup. See the README in your GitHub repo for step-by-step instructions.</p>
+    <label>Google OAuth Client ID</label>
+    <input type="text" id="client-id-input" placeholder="123456789.apps.googleusercontent.com">
+    <label>Your GitHub Pages domain (no https://)</label>
+    <input type="text" id="domain-input" placeholder="yourusername.github.io">
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="hideConfig()">Cancel</button>
+      <button class="btn-save" onclick="saveConfig()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay">
+  <div id="loading-box">
+    <div class="spinner"></div>
+    <p id="loading-msg">Loading from Drive...</p>
+  </div>
+</div>
+
+<div id="lightbox" onclick="closeLightbox()">
+  <img id="lightbox-img" src="" alt="Full size preview">
+</div>
+
 <script>
-const STORAGE_KEY = 'gbp_photo_map_v3';
-const PENDING_KEY = 'gbp_photo_pending_v3';
+const STORAGE_KEY = 'gbp_photo_map_v5';
+const PENDING_KEY = 'gbp_photo_pending_v5';
+const CONFIG_KEY  = 'gbp_config_v1';
 
 const map = L.map('map', { zoomControl: true }).setView([35.5, -86.5], 6);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© OpenStreetMap contributors', maxZoom: 19
 }).addTo(map);
 
-let photos = [];
-let pending = [];
-let markers = {};
-let activeBrand = 'all';
-let showUsed = false;
-let panelOpen = true;
+let photos = [], pending = [], markers = {};
+let activeBrand = 'all', showUsed = false, panelOpen = true;
+let pickerApiLoaded = false, oauthToken = null;
 let suggestTimers = {};
+let config = { clientId: '', domain: '' };
+
+function loadConfig() {
+  try { const c = localStorage.getItem(CONFIG_KEY); if (c) config = JSON.parse(c); } catch(e) {}
+  updateSetupBanner();
+}
+function saveConfig() {
+  config.clientId = document.getElementById('client-id-input').value.trim();
+  config.domain   = document.getElementById('domain-input').value.trim();
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  hideConfig(); updateSetupBanner(); toast('Settings saved.');
+}
+function showConfig() {
+  document.getElementById('client-id-input').value = config.clientId;
+  document.getElementById('domain-input').value    = config.domain;
+  document.getElementById('config-overlay').style.display = 'flex';
+}
+function hideConfig() { document.getElementById('config-overlay').style.display = 'none'; }
+function updateSetupBanner() {
+  document.getElementById('setup-banner').style.display = config.clientId ? 'none' : 'flex';
+}
 
 function toast(msg) {
-  const el = document.createElement('div');
-  el.className = 'toast';
-  el.textContent = msg;
+  const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => { el.classList.add('fade'); setTimeout(() => el.remove(), 400); }, 2800);
 }
+function showLoading(msg) {
+  document.getElementById('loading-msg').textContent = msg || 'Loading...';
+  document.getElementById('loading-overlay').style.display = 'flex';
+}
+function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
 
 function save() {
-  const toStore = photos.map(p => ({ id: p.id, name: p.name, lat: p.lat, lng: p.lng, brand: p.brand, used: p.used, thumb: p.thumb, manual: p.manual || false }));
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore)); } catch(e) {}
-  try { localStorage.setItem(PENDING_KEY, JSON.stringify(pending.map(p => ({ id: p.id, name: p.name, brand: p.brand, thumb: p.thumb })))); } catch(e) {}
+  const toStore = photos.map(p => ({
+    id: p.id, name: p.name, lat: p.lat, lng: p.lng,
+    brand: p.brand, used: p.used, thumb: p.thumb,
+    manual: p.manual||false, driveId: p.driveId||null
+  }));
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore)); }
+  catch(e) { toast('Storage full — export CSV to back up your work.'); }
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(
+    pending.map(p => ({ id: p.id, name: p.name, brand: p.brand, thumb: p.thumb, driveId: p.driveId||null }))
+  )); } catch(e) {}
 }
 
 function load() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) { photos = JSON.parse(raw); photos.forEach(p => addMarker(p)); }
-  } catch(e) {}
-  try {
-    const rawP = localStorage.getItem(PENDING_KEY);
-    if (rawP) { pending = JSON.parse(rawP); renderPendingPanel(); }
-  } catch(e) {}
+  try { const r = localStorage.getItem(STORAGE_KEY); if (r) { photos = JSON.parse(r); photos.forEach(p => addMarker(p)); } } catch(e) {}
+  try { const r = localStorage.getItem(PENDING_KEY); if (r) { pending = JSON.parse(r); renderPendingPanel(); } } catch(e) {}
   updateStats(); checkNoPhotos();
 }
 
@@ -277,7 +289,7 @@ function guessBrand(name) {
   const n = name.toLowerCase();
   if (n.includes('mosquito')) return 'mosquito';
   if (n.includes('lawn')) return 'lawn';
-  if (n.includes('new-age') || n.includes('newage') || n.includes('lights') || n.includes('jellyfish') || n.includes('nag')) return 'newage';
+  if (n.includes('new-age')||n.includes('newage')||n.includes('lights')||n.includes('jellyfish')||n.includes('nag')) return 'newage';
   return 'mosquito';
 }
 
@@ -285,26 +297,24 @@ const brandColors = { mosquito: '#185FA5', lawn: '#3B6D11', newage: '#854F0B' };
 const brandLabels = { mosquito: 'Mosquito Squad', lawn: 'Lawn Squad', newage: 'New Age Lights' };
 
 function makeIcon(brand, used) {
-  const color = used ? '#aaa' : (brandColors[brand] || '#444');
+  const color = used ? '#aaa' : (brandColors[brand]||'#444');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
-    <path d="M14 0C6.27 0 0 6.27 0 14c0 9.33 14 22 14 22S28 23.33 28 14C28 6.27 21.73 0 14 0z" fill="${color}" opacity="${used ? 0.45 : 1}"/>
+    <path d="M14 0C6.27 0 0 6.27 0 14c0 9.33 14 22 14 22S28 23.33 28 14C28 6.27 21.73 0 14 0z" fill="${color}" opacity="${used?0.45:1}"/>
     <circle cx="14" cy="14" r="6" fill="white" opacity="0.9"/>
   </svg>`;
-  return L.divIcon({ html: svg, className: '', iconSize: [28, 36], iconAnchor: [14, 36], popupAnchor: [0, -38] });
+  return L.divIcon({ html: svg, className: '', iconSize: [28,36], iconAnchor: [14,36], popupAnchor: [0,-38] });
 }
 
 function buildPopup(p) {
-  const color = brandColors[p.brand] || '#444';
-  const label = brandLabels[p.brand] || p.brand;
-  const lat = parseFloat(p.lat).toFixed(5);
-  const lng = parseFloat(p.lng).toFixed(5);
+  const color = brandColors[p.brand]||'#444';
+  const label = brandLabels[p.brand]||p.brand;
+  const lat = parseFloat(p.lat).toFixed(5), lng = parseFloat(p.lng).toFixed(5);
   let html = `<div class="popup-wrap">`;
-  if (p.thumb) html += `<img class="popup-img" src="${p.thumb}" alt="${p.name}">`;
+  if (p.thumb) html += `<img class="popup-img" src="${p.thumb}" alt="${p.name}" onclick="openLightbox('${p.id}')">`;
   html += `<div class="popup-name">${p.name}</div>`;
   html += `<div class="popup-badges"><span class="popup-brand-badge" style="background:${color}">${label}</span>`;
-  if (p.manual) html += `<span class="popup-manual-tag">manual pin</span>`;
-  html += `</div>`;
-  html += `<div class="popup-coords">${lat}, ${lng}</div>`;
+  if (p.manual) html += `<span class="popup-source-tag">manual pin</span>`;
+  html += `</div><div class="popup-coords">${lat}, ${lng}</div>`;
   if (!p.used) {
     html += `<div class="popup-actions">
       <button class="btn-used" onclick="markUsed('${p.id}')">Mark used</button>
@@ -313,217 +323,136 @@ function buildPopup(p) {
   } else {
     html += `<button class="btn-undo" onclick="undoUsed('${p.id}')">Undo — mark unused</button>`;
   }
-  html += `</div>`;
-  return html;
+  if (p.driveId) {
+    html += `<button class="btn-download" onclick="downloadDriveFile('${p.driveId}','${p.name}')"><i class="ti ti-download" style="font-size:13px"></i> Download full resolution</button>`;
+  }
+  html += `</div>`; return html;
 }
+
+window.downloadDriveFile = function(fileId, name) {
+  if (!oauthToken) {
+    toast('Reconnect Drive first — click Add from Drive.');
+    return;
+  }
+  showLoading('Downloading from Drive...');
+  fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${oauthToken}` }
+  }).then(r => {
+    if (!r.ok) throw new Error('fetch failed');
+    return r.blob();
+  }).then(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    hideLoading();
+  }).catch(() => { hideLoading(); toast('Download failed — try reconnecting Drive.'); });
+};
+
+window.openLightbox = function(id) {
+  const p = photos.find(x => x.id === id); if (!p||!p.thumb) return;
+  document.getElementById('lightbox-img').src = p.thumb;
+  document.getElementById('lightbox').style.display = 'flex';
+};
+window.closeLightbox = function() { document.getElementById('lightbox').style.display = 'none'; };
 
 function addMarker(p) {
   const marker = L.marker([p.lat, p.lng], { icon: makeIcon(p.brand, p.used) })
-    .bindPopup(() => buildPopup(p), { maxWidth: 240, minWidth: 220 });
-  const visible = (activeBrand === 'all' || activeBrand === p.brand) && (showUsed || !p.used);
+    .bindPopup(() => buildPopup(p), { maxWidth: 260, minWidth: 240 });
+  const visible = (activeBrand==='all'||activeBrand===p.brand)&&(showUsed||!p.used);
   if (visible) marker.addTo(map);
   markers[p.id] = marker;
 }
-
 function refreshMarker(p) {
   if (!markers[p.id]) return;
   markers[p.id].setIcon(makeIcon(p.brand, p.used));
-  const visible = (activeBrand === 'all' || activeBrand === p.brand) && (showUsed || !p.used);
+  const visible = (activeBrand==='all'||activeBrand===p.brand)&&(showUsed||!p.used);
   if (visible) { if (!map.hasLayer(markers[p.id])) markers[p.id].addTo(map); }
   else { if (map.hasLayer(markers[p.id])) map.removeLayer(markers[p.id]); }
 }
-
 function applyFilters() { photos.forEach(p => refreshMarker(p)); updateStats(); }
-
 function updateStats() {
-  const unused = photos.filter(p => !p.used).length;
-  const used = photos.filter(p => p.used).length;
+  const unused = photos.filter(p=>!p.used).length, used = photos.filter(p=>p.used).length;
   document.getElementById('stats').textContent = `${unused} unused · ${used} used`;
   checkNoPhotos();
 }
-
 function checkNoPhotos() {
-  document.getElementById('no-photos').style.display = (photos.length === 0 && pending.length === 0) ? 'block' : 'none';
+  document.getElementById('no-photos').style.display = (photos.length===0&&pending.length===0)?'block':'none';
 }
 
 window.markUsed = function(id) {
-  const p = photos.find(x => x.id === id); if (!p) return;
-  p.used = true; save(); refreshMarker(p); updateStats(); map.closePopup();
+  const p=photos.find(x=>x.id===id); if(!p) return;
+  p.used=true; save(); refreshMarker(p); updateStats(); map.closePopup();
 };
 window.undoUsed = function(id) {
-  const p = photos.find(x => x.id === id); if (!p) return;
-  p.used = false; save(); refreshMarker(p); updateStats(); map.closePopup();
+  const p=photos.find(x=>x.id===id); if(!p) return;
+  p.used=false; save(); refreshMarker(p); updateStats(); map.closePopup();
 };
 window.removePhoto = function(id) {
-  const idx = photos.findIndex(x => x.id === id); if (idx === -1) return;
-  if (markers[id]) { map.removeLayer(markers[id]); delete markers[id]; }
-  photos.splice(idx, 1); save(); updateStats(); map.closePopup();
+  const idx=photos.findIndex(x=>x.id===id); if(idx===-1) return;
+  if(markers[id]){map.removeLayer(markers[id]);delete markers[id];}
+  photos.splice(idx,1); save(); updateStats(); map.closePopup();
 };
 
-// CSV Export
-function exportCSV() {
-  if (photos.length === 0) { toast('No photos to export yet.'); return; }
-  const header = 'id,name,lat,lng,brand,used,manual';
-  const rows = photos.map(p =>
-    [p.id, `"${p.name.replace(/"/g, '""')}"`, p.lat, p.lng, p.brand, p.used ? 'true' : 'false', p.manual ? 'true' : 'false'].join(',')
-  );
-  const csv = [header, ...rows].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url;
-  a.download = `gbp-photo-inventory-${new Date().toISOString().slice(0,10)}.csv`;
-  a.click(); URL.revokeObjectURL(url);
-  toast(`Exported ${photos.length} photos.`);
+// Google Drive Picker
+function loadPickerApi() {
+  if (!window.gapi) {
+    const s = document.createElement('script');
+    s.src = 'https://apis.google.com/js/api.js';
+    s.onload = () => gapi.load('picker', () => { pickerApiLoaded = true; });
+    document.body.appendChild(s);
+  }
 }
 
-// CSV Import
-document.getElementById('csv-input').addEventListener('change', function(e) {
-  const file = e.target.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(ev) {
-    const lines = ev.target.result.trim().split('\n');
-    if (lines.length < 2) { toast('CSV appears empty.'); return; }
-    const header = lines[0].split(',');
-    const idx = { id: header.indexOf('id'), name: header.indexOf('name'), lat: header.indexOf('lat'), lng: header.indexOf('lng'), brand: header.indexOf('brand'), used: header.indexOf('used'), manual: header.indexOf('manual') };
-    if (idx.lat === -1 || idx.lng === -1) { toast('CSV missing required columns.'); return; }
-    let added = 0; let skipped = 0;
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].match(/(".*?"|[^,]+|(?<=,)(?=,)|(?<=,)$|^(?=,))/g) || lines[i].split(',');
-      const clean = cols.map(c => c.replace(/^"|"$/g, '').replace(/""/g, '"'));
-      const id = clean[idx.id] || (Date.now() + Math.random().toString(36).slice(2));
-      const name = clean[idx.name] || 'unknown';
-      const lat = parseFloat(clean[idx.lat]);
-      const lng = parseFloat(clean[idx.lng]);
-      if (isNaN(lat) || isNaN(lng)) { skipped++; continue; }
-      if (photos.find(p => p.id === id)) { skipped++; continue; }
-      const p = {
-        id, name, lat, lng,
-        brand: clean[idx.brand] || guessBrand(name),
-        used: clean[idx.used] === 'true',
-        manual: clean[idx.manual] === 'true',
-        thumb: null
-      };
-      photos.push(p); addMarker(p); added++;
-    }
-    if (added > 0) {
-      const bounds = L.latLngBounds(photos.map(p => [p.lat, p.lng]));
-      map.fitBounds(bounds, { padding: [60, 60] });
-      save(); updateStats();
-    }
-    toast(`Imported ${added} photos${skipped > 0 ? `, ${skipped} skipped` : ''}.`);
-  };
-  reader.readAsText(file);
-  this.value = '';
-});
+function openDrivePicker() {
+  if (!config.clientId) { showConfig(); return; }
+  if (!window.google || !window.google.accounts) {
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onload = () => initTokenClient();
+    document.body.appendChild(s);
+    if (!window.gapi) loadPickerApi();
+  } else {
+    initTokenClient();
+  }
+}
 
-// Pending panel
-function renderPendingPanel() {
-  const panel = document.getElementById('manual-panel');
-  const body = document.getElementById('manual-body');
-  const badge = document.getElementById('manual-badge');
-  if (pending.length === 0) { panel.style.display = 'none'; return; }
-  panel.style.display = 'block';
-  badge.textContent = pending.length;
-  body.innerHTML = '';
-  if (!panelOpen) { body.style.display = 'none'; return; }
-  body.style.display = 'flex';
-  pending.forEach(p => {
-    const row = document.createElement('div');
-    row.className = 'manual-row';
-    row.id = `pending-${p.id}`;
-    row.innerHTML = `
-      <div class="manual-filename">${p.name}</div>
-      <div class="manual-addr-wrap">
-        <input class="manual-addr" type="text" placeholder="Enter address or neighborhood..." id="addr-${p.id}" autocomplete="off">
-        <div class="suggestions" id="sug-${p.id}" style="display:none"></div>
-      </div>
-      <select class="brand-select" id="brand-${p.id}">
-        <option value="mosquito" ${p.brand === 'mosquito' ? 'selected' : ''}>Mosquito Squad</option>
-        <option value="lawn" ${p.brand === 'lawn' ? 'selected' : ''}>Lawn Squad</option>
-        <option value="newage" ${p.brand === 'newage' ? 'selected' : ''}>New Age Lights</option>
-      </select>
-      <button class="pin-btn" id="pinbtn-${p.id}" disabled onclick="pinPending('${p.id}')">Pin it</button>
-    `;
-    body.appendChild(row);
-    const input = document.getElementById(`addr-${p.id}`);
-    const sugBox = document.getElementById(`sug-${p.id}`);
-    let selectedCoords = null;
-    input.addEventListener('input', () => {
-      selectedCoords = null;
-      document.getElementById(`pinbtn-${p.id}`).disabled = true;
-      clearTimeout(suggestTimers[p.id]);
-      const q = input.value.trim();
-      if (q.length < 3) { sugBox.style.display = 'none'; return; }
-      suggestTimers[p.id] = setTimeout(async () => {
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}&countrycodes=us`);
-          const data = await res.json();
-          if (!data.length) { sugBox.style.display = 'none'; return; }
-          sugBox.innerHTML = '';
-          data.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'suggestion-item';
-            div.textContent = item.display_name;
-            div.addEventListener('click', () => {
-              input.value = item.display_name;
-              selectedCoords = { lat: parseFloat(item.lat), lng: parseFloat(item.lon) };
-              sugBox.style.display = 'none';
-              document.getElementById(`pinbtn-${p.id}`).disabled = false;
-            });
-            sugBox.appendChild(div);
-          });
-          sugBox.style.display = 'block';
-        } catch(e) { sugBox.style.display = 'none'; }
-      }, 400);
-    });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') sugBox.style.display = 'none';
-      if (e.key === 'Enter' && selectedCoords) pinPendingWith(p.id, selectedCoords, document.getElementById(`brand-${p.id}`).value);
-    });
-    document.addEventListener('click', (ev) => { if (!row.contains(ev.target)) sugBox.style.display = 'none'; });
-    window[`_coords_${p.id}`] = () => ({ coords: selectedCoords, brand: document.getElementById(`brand-${p.id}`).value });
+function initTokenClient() {
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: config.clientId,
+    scope: 'https://www.googleapis.com/auth/drive.readonly',
+    callback: (resp) => {
+      if (resp.error) { toast('Drive sign-in failed: ' + resp.error); return; }
+      oauthToken = resp.access_token;
+      if (!pickerApiLoaded) {
+        if (!window.gapi) { loadPickerApi(); setTimeout(showPicker, 1500); }
+        else { gapi.load('picker', () => { pickerApiLoaded = true; showPicker(); }); }
+      } else { showPicker(); }
+    }
   });
+  client.requestAccessToken({ prompt: '' });
 }
 
-function pinPendingWith(id, coords, brand) {
-  const pIdx = pending.findIndex(x => x.id === id); if (pIdx === -1) return;
-  const p = pending[pIdx];
-  const photo = { id: p.id, name: p.name, lat: coords.lat, lng: coords.lng, brand, used: false, thumb: p.thumb, manual: true };
-  photos.push(photo); pending.splice(pIdx, 1);
-  addMarker(photo); map.setView([coords.lat, coords.lng], 14);
-  save(); renderPendingPanel(); updateStats();
+function showPicker() {
+  if (!pickerApiLoaded) { toast('Picker still loading, try again in a moment.'); return; }
+  const view = new google.picker.View(google.picker.ViewId.DOCS_IMAGES);
+  const picker = new google.picker.PickerBuilder()
+    .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+    .setOAuthToken(oauthToken)
+    .addView(view)
+    .setCallback(pickerCallback)
+    .build();
+  picker.setVisible(true);
 }
 
-window.pinPending = function(id) {
-  const getter = window[`_coords_${id}`]; if (!getter) return;
-  const { coords, brand } = getter(); if (!coords) return;
-  pinPendingWith(id, coords, brand);
-};
-
-document.getElementById('manual-header').addEventListener('click', () => {
-  panelOpen = !panelOpen;
-  document.getElementById('manual-body').style.display = panelOpen ? 'flex' : 'none';
-  document.getElementById('collapse-icon').className = panelOpen ? 'ti ti-chevron-up' : 'ti ti-chevron-down';
-});
-
-// EXIF helpers
-function convertDMSToDD(degrees, minutes, seconds, direction) {
-  let dd = degrees + minutes / 60 + seconds / 3600;
-  if (direction === 'S' || direction === 'W') dd = dd * -1;
-  return dd;
-}
+function convertDMSToDD(d,m,s,dir) { let dd=d+m/60+s/3600; if(dir==='S'||dir==='W') dd*=-1; return dd; }
 function extractEXIF(file) {
   return new Promise((resolve) => {
     EXIF.getData(file, function() {
-      const lat = EXIF.getTag(this, 'GPSLatitude');
-      const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
-      const lng = EXIF.getTag(this, 'GPSLongitude');
-      const lngRef = EXIF.getTag(this, 'GPSLongitudeRef');
-      if (lat && lng && latRef && lngRef) {
-        const latDD = convertDMSToDD(lat[0], lat[1], lat[2], latRef);
-        const lngDD = convertDMSToDD(lng[0], lng[1], lng[2], lngRef);
-        if (!isNaN(latDD) && !isNaN(lngDD) && latDD !== 0 && lngDD !== 0) resolve({ lat: latDD, lng: lngDD });
-        else resolve(null);
+      const lat=EXIF.getTag(this,'GPSLatitude'), latR=EXIF.getTag(this,'GPSLatitudeRef');
+      const lng=EXIF.getTag(this,'GPSLongitude'), lngR=EXIF.getTag(this,'GPSLongitudeRef');
+      if (lat&&lng&&latR&&lngR) {
+        const la=convertDMSToDD(lat[0],lat[1],lat[2],latR), lo=convertDMSToDD(lng[0],lng[1],lng[2],lngR);
+        if (!isNaN(la)&&!isNaN(lo)&&la!==0&&lo!==0) resolve({lat:la,lng:lo}); else resolve(null);
       } else resolve(null);
     });
   });
@@ -535,9 +464,9 @@ function getThumb(file) {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const max = 300; const ratio = Math.min(max / img.width, max / img.height);
-        canvas.width = Math.round(img.width * ratio); canvas.height = Math.round(img.height * ratio);
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const ratio = Math.min(300/img.width, 300/img.height, 1);
+        canvas.width = Math.round(img.width*ratio); canvas.height = Math.round(img.height*ratio);
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
         resolve(canvas.toDataURL('image/jpeg', 0.7));
       };
       img.src = e.target.result;
@@ -546,50 +475,157 @@ function getThumb(file) {
   });
 }
 
-async function processFiles(files) {
-  const newPhotos = [];
-  for (const file of files) {
-    if (!file.type.startsWith('image/')) continue;
-    if (photos.find(p => p.name === file.name) || pending.find(p => p.name === file.name)) continue;
-    const thumb = await getThumb(file);
-    const coords = await extractEXIF(file);
-    if (coords) {
-      const p = { id: Date.now() + Math.random().toString(36).slice(2), name: file.name, lat: coords.lat, lng: coords.lng, brand: guessBrand(file.name), used: false, thumb, manual: false };
-      photos.push(p); newPhotos.push(p); addMarker(p); refreshMarker(p);
-    } else {
-      pending.push({ id: Date.now() + Math.random().toString(36).slice(2), name: file.name, brand: guessBrand(file.name), thumb });
-    }
+async function pickerCallback(data) {
+  if (data.action !== google.picker.Action.PICKED) return;
+  const docs = data.docs;
+  showLoading(`Loading ${docs.length} photo${docs.length>1?'s':''} from Drive...`);
+  let added = 0, noGps = 0;
+  for (const doc of docs) {
+    if (photos.find(p=>p.driveId===doc.id)||pending.find(p=>p.driveId===doc.id)) continue;
+    try {
+      const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${doc.id}?alt=media`, {
+        headers: { Authorization: `Bearer ${oauthToken}` }
+      });
+      const blob = await resp.blob();
+      const file = new File([blob], doc.name, { type: blob.type });
+      const thumb = await getThumb(file);
+      const coords = await extractEXIF(file);
+      const id = Date.now() + Math.random().toString(36).slice(2);
+      if (coords) {
+        const p = { id, name: doc.name, lat: coords.lat, lng: coords.lng, brand: guessBrand(doc.name), used: false, thumb, driveId: doc.id, manual: false };
+        photos.push(p); addMarker(p); refreshMarker(p); added++;
+      } else {
+        pending.push({ id, name: doc.name, brand: guessBrand(doc.name), thumb, driveId: doc.id });
+        noGps++;
+      }
+    } catch(e) { console.error('Failed:', doc.name, e); }
   }
   save();
-  if (newPhotos.length > 0) {
-    const allPinned = photos.filter(p => (activeBrand === 'all' || p.brand === activeBrand) && (showUsed || !p.used));
-    if (allPinned.length > 0) {
-      map.fitBounds(L.latLngBounds(allPinned.map(p => [p.lat, p.lng])), { padding: [60, 60] });
-    }
+  if (added > 0) {
+    const pinned = photos.filter(p=>(activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used));
+    if (pinned.length>0) map.fitBounds(L.latLngBounds(pinned.map(p=>[p.lat,p.lng])),{padding:[60,60]});
   }
-  renderPendingPanel(); updateStats();
+  renderPendingPanel(); updateStats(); hideLoading();
+  let msg = `Added ${added} photo${added!==1?'s':''}`;
+  if (noGps > 0) msg += ` · ${noGps} need manual location`;
+  toast(msg);
 }
 
-document.getElementById('file-input').addEventListener('change', (e) => {
-  processFiles(Array.from(e.target.files)); e.target.value = '';
-});
-const dz = document.getElementById('drop-zone');
-['dragover','dragenter'].forEach(ev => document.getElementById('map-container').addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('drag-over'); }));
-['dragleave','dragend'].forEach(ev => document.getElementById('map-container').addEventListener(ev, () => dz.classList.remove('drag-over')));
-document.getElementById('map-container').addEventListener('drop', (e) => { e.preventDefault(); dz.classList.remove('drag-over'); processFiles(Array.from(e.dataTransfer.files)); });
+// CSV
+function exportCSV() {
+  if (!photos.length) { toast('No photos to export yet.'); return; }
+  const header = 'id,name,lat,lng,brand,used,manual,driveId';
+  const rows = photos.map(p => [
+    p.id, `"${p.name.replace(/"/g,'""')}"`, p.lat, p.lng,
+    p.brand, p.used?'true':'false', p.manual?'true':'false', p.driveId||''
+  ].join(','));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([[header,...rows].join('\n')],{type:'text/csv'}));
+  a.download = `gbp-photo-inventory-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); toast(`Exported ${photos.length} photos.`);
+}
 
-document.querySelectorAll('.filter-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active'); activeBrand = btn.dataset.brand; applyFilters();
+document.getElementById('csv-input').addEventListener('change', function(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const lines = ev.target.result.trim().split('\n');
+    if (lines.length < 2) { toast('CSV appears empty.'); return; }
+    const h = lines[0].split(',');
+    const idx = { id:h.indexOf('id'),name:h.indexOf('name'),lat:h.indexOf('lat'),lng:h.indexOf('lng'),brand:h.indexOf('brand'),used:h.indexOf('used'),manual:h.indexOf('manual'),driveId:h.indexOf('driveId') };
+    if (idx.lat===-1||idx.lng===-1) { toast('CSV missing required columns.'); return; }
+    let added=0, skipped=0;
+    for (let i=1;i<lines.length;i++) {
+      const cols = lines[i].match(/(".*?"|[^,]+|(?<=,)(?=,)|(?<=,)$|^(?=,))/g)||lines[i].split(',');
+      const c = cols.map(x=>x.replace(/^"|"$/g,'').replace(/""/g,'"'));
+      const id=c[idx.id]||(Date.now()+Math.random().toString(36).slice(2));
+      const lat=parseFloat(c[idx.lat]), lng=parseFloat(c[idx.lng]);
+      if (isNaN(lat)||isNaN(lng)){skipped++;continue;}
+      if (photos.find(p=>p.id===id)){skipped++;continue;}
+      const p={id,name:c[idx.name]||'unknown',lat,lng,brand:c[idx.brand]||'mosquito',used:c[idx.used]==='true',manual:c[idx.manual]==='true',thumb:null,driveId:c[idx.driveId]||null};
+      photos.push(p); addMarker(p); added++;
+    }
+    if (added>0){map.fitBounds(L.latLngBounds(photos.map(p=>[p.lat,p.lng])),{padding:[60,60]});save();updateStats();}
+    toast(`Imported ${added} photos${skipped>0?`, ${skipped} skipped`:''}.`);
+  };
+  reader.readAsText(file); this.value='';
+});
+
+// Pending panel
+function renderPendingPanel() {
+  const panel=document.getElementById('manual-panel'), body=document.getElementById('manual-body'), badge=document.getElementById('manual-badge');
+  if (!pending.length){panel.style.display='none';return;}
+  panel.style.display='block'; badge.textContent=pending.length; body.innerHTML='';
+  if (!panelOpen){body.style.display='none';return;}
+  body.style.display='flex';
+  pending.forEach(p=>{
+    const row=document.createElement('div'); row.className='manual-row'; row.id=`pending-${p.id}`;
+    row.innerHTML=`
+      <div class="manual-filename">${p.name}</div>
+      <div class="manual-addr-wrap">
+        <input class="manual-addr" type="text" placeholder="Enter address or neighborhood..." id="addr-${p.id}" autocomplete="off">
+        <div class="suggestions" id="sug-${p.id}" style="display:none"></div>
+      </div>
+      <select class="brand-select" id="brand-${p.id}">
+        <option value="mosquito" ${p.brand==='mosquito'?'selected':''}>Mosquito Squad</option>
+        <option value="lawn" ${p.brand==='lawn'?'selected':''}>Lawn Squad</option>
+        <option value="newage" ${p.brand==='newage'?'selected':''}>New Age Lights</option>
+      </select>
+      <button class="pin-btn" id="pinbtn-${p.id}" disabled onclick="pinPending('${p.id}')">Pin it</button>`;
+    body.appendChild(row);
+    const input=document.getElementById(`addr-${p.id}`), sugBox=document.getElementById(`sug-${p.id}`);
+    let selectedCoords=null;
+    input.addEventListener('input',()=>{
+      selectedCoords=null; document.getElementById(`pinbtn-${p.id}`).disabled=true;
+      clearTimeout(suggestTimers[p.id]);
+      const q=input.value.trim(); if(q.length<3){sugBox.style.display='none';return;}
+      suggestTimers[p.id]=setTimeout(async()=>{
+        try{
+          const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}&countrycodes=us`);
+          const d=await r.json(); if(!d.length){sugBox.style.display='none';return;}
+          sugBox.innerHTML='';
+          d.forEach(item=>{
+            const div=document.createElement('div'); div.className='suggestion-item'; div.textContent=item.display_name;
+            div.addEventListener('click',()=>{input.value=item.display_name;selectedCoords={lat:parseFloat(item.lat),lng:parseFloat(item.lon)};sugBox.style.display='none';document.getElementById(`pinbtn-${p.id}`).disabled=false;});
+            sugBox.appendChild(div);
+          });
+          sugBox.style.display='block';
+        }catch(e){sugBox.style.display='none';}
+      },400);
+    });
+    document.addEventListener('click',(ev)=>{if(!row.contains(ev.target))sugBox.style.display='none';});
+    window[`_coords_${p.id}`]=()=>({coords:selectedCoords,brand:document.getElementById(`brand-${p.id}`).value});
+  });
+}
+
+function pinPendingWith(id,coords,brand){
+  const pIdx=pending.findIndex(x=>x.id===id); if(pIdx===-1)return;
+  const p=pending[pIdx];
+  const photo={id:p.id,name:p.name,lat:coords.lat,lng:coords.lng,brand,used:false,thumb:p.thumb,driveId:p.driveId||null,manual:true};
+  photos.push(photo); pending.splice(pIdx,1);
+  addMarker(photo); map.setView([coords.lat,coords.lng],14);
+  save(); renderPendingPanel(); updateStats();
+}
+window.pinPending=function(id){const g=window[`_coords_${id}`];if(!g)return;const{coords,brand}=g();if(!coords)return;pinPendingWith(id,coords,brand);};
+
+document.getElementById('manual-header').addEventListener('click',()=>{
+  panelOpen=!panelOpen;
+  document.getElementById('manual-body').style.display=panelOpen?'flex':'none';
+  document.getElementById('collapse-icon').className=panelOpen?'ti ti-chevron-up':'ti ti-chevron-down';
+});
+document.querySelectorAll('.filter-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); activeBrand=btn.dataset.brand; applyFilters();
   });
 });
-document.getElementById('toggle-used-btn').addEventListener('click', function() {
-  showUsed = !showUsed; this.classList.toggle('active', showUsed);
-  this.textContent = showUsed ? 'Hide used' : 'Show used'; applyFilters();
+document.getElementById('toggle-used-btn').addEventListener('click',function(){
+  showUsed=!showUsed; this.classList.toggle('active',showUsed);
+  this.textContent=showUsed?'Hide used':'Show used'; applyFilters();
 });
+document.addEventListener('keydown',(e)=>{if(e.key==='Escape')closeLightbox();});
 
-load();
+loadConfig(); load(); loadPickerApi();
 </script>
 </body>
 </html>
