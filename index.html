@@ -46,8 +46,7 @@
   .icon-btn.primary{background:var(--blue);color:#fff;border-color:transparent;}
   .icon-btn.primary:hover{background:var(--blue-dark);}
   .icon-btn.success{background:var(--green);color:#fff;border-color:transparent;}
-  #setup-banner{display:none;padding:10px 16px;background:#FFF8E6;border-bottom:0.5px solid #F0C84A;font-size:13px;color:#5a4200;align-items:center;gap:10px;flex-shrink:0;}
-  #setup-banner a{color:var(--blue);font-weight:500;cursor:pointer;}
+
   #drop-zone-overlay{display:none;position:fixed;inset:0;background:rgba(24,95,165,0.12);border:3px dashed var(--blue);z-index:2000;align-items:center;justify-content:center;pointer-events:none;}
   #drop-zone-overlay p{font-size:18px;font-weight:500;color:var(--blue);}
   #config-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:3000;align-items:center;justify-content:center;}
@@ -92,7 +91,12 @@
   #loading-progress{font-size:12px;color:var(--text-tertiary);margin-top:4px;}
   .spinner{width:28px;height:28px;border:2.5px solid var(--border-light);border-top-color:var(--blue);border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto;}
   @keyframes spin{to{transform:rotate(360deg);}}
-  .popup-wrap{font-family:var(--font);width:230px;}
+  .popup-wrap{font-family:var(--font);width:250px;}
+  .popup-location-header{font-size:12px;font-weight:500;color:#1a1a18;margin-bottom:6px;}
+  .popup-location-header .popup-coords{margin-bottom:0;margin-top:2px;}
+  .photo-card-scroll{max-height:420px;overflow-y:auto;padding-right:2px;}
+  .photo-card{padding:2px 0;}
+  .photo-card-divider{border-top:0.5px solid rgba(0,0,0,0.1);margin:10px 0;}
   .popup-img{width:100%;height:130px;object-fit:cover;border-radius:6px;display:block;margin-bottom:8px;cursor:zoom-in;}
   .popup-name{font-size:12px;font-weight:500;color:#1a1a18;word-break:break-all;margin-bottom:5px;}
   .popup-badges{margin-bottom:6px;}
@@ -139,14 +143,11 @@
         <i class="ti ti-file-import"></i> Import CSV
         <input type="file" id="csv-input" accept=".csv" style="display:none">
       </label>
-      <button class="icon-btn" onclick="showConfig()"><i class="ti ti-settings"></i></button>
+
     </div>
   </div>
 
-  <div id="setup-banner">
-    <i class="ti ti-alert-circle" style="font-size:16px;flex-shrink:0"></i>
-    <span>Google Drive needs a Client ID to work. Click <a onclick="showConfig()">Settings</a> to add yours — one-time setup, about 10 minutes.</span>
-  </div>
+
 
   <div id="drop-zone-overlay">
     <p><i class="ti ti-cloud-upload" style="font-size:28px;display:block;margin-bottom:8px"></i>Drop to upload to Drive</p>
@@ -214,7 +215,7 @@ let photos=[],pending=[],markers={};
 let activeBrand='all',showUsed=false,panelOpen=true;
 let pickerApiLoaded=false,oauthToken=null,driveFolderId=null;
 let suggestTimers={};
-let config={clientId:'',domain:''};
+let config={clientId:'788046954081-1ojin1jscuit4vujd76qcinm3hjsgiq4.apps.googleusercontent.com',domain:'eloveland-bit.github.io'};
 
 // Config
 function loadConfig(){
@@ -234,9 +235,7 @@ function showConfig(){
   document.getElementById('config-overlay').style.display='flex';
 }
 function hideConfig(){document.getElementById('config-overlay').style.display='none';}
-function updateSetupBanner(){
-  document.getElementById('setup-banner').style.display=config.clientId?'none':'flex';
-}
+function updateSetupBanner(){}
 
 function toast(msg){
   const el=document.createElement('div');el.className='toast';el.textContent=msg;
@@ -275,35 +274,52 @@ function guessBrand(name){
 const brandColors={mosquito:'#185FA5',lawn:'#3B6D11',newage:'#854F0B'};
 const brandLabels={mosquito:'Mosquito Squad',lawn:'Lawn Squad',newage:'New Age Lights'};
 
-function makeIcon(brand,used){
-  const color=used?'#aaa':(brandColors[brand]||'#444');
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
-    <path d="M14 0C6.27 0 0 6.27 0 14c0 9.33 14 22 14 22S28 23.33 28 14C28 6.27 21.73 0 14 0z" fill="${color}" opacity="${used?0.45:1}"/>
-    <circle cx="14" cy="14" r="6" fill="white" opacity="0.9"/>
-  </svg>`;
+function locKey(p){return `${parseFloat(p.lat).toFixed(5)},${parseFloat(p.lng).toFixed(5)}`;}
+
+function makeIcon(photosAtLoc,brand){
+  const allUsed=photosAtLoc.every(p=>p.used);
+  const count=photosAtLoc.length;
+  const color=allUsed?'#aaa':(brandColors[brand]||'#444');
+  const badge=count>1?`<div style="position:absolute;top:-4px;right:-4px;background:#E24B4A;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;font-family:sans-serif;border:1.5px solid #fff;">${count}</div>`:'';
+  const svg=`<div style="position:relative;display:inline-block;"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36"><path d="M14 0C6.27 0 0 6.27 0 14c0 9.33 14 22 14 22S28 23.33 28 14C28 6.27 21.73 0 14 0z" fill="${color}" opacity="${allUsed?0.45:1}"/><circle cx="14" cy="14" r="6" fill="white" opacity="0.9"/></svg>${badge}</div>`;
   return L.divIcon({html:svg,className:'',iconSize:[28,36],iconAnchor:[14,36],popupAnchor:[0,-38]});
 }
 
-function buildPopup(p){
+function buildPhotoCard(p){
   const color=brandColors[p.brand]||'#444';
   const label=brandLabels[p.brand]||p.brand;
-  const lat=parseFloat(p.lat).toFixed(5),lng=parseFloat(p.lng).toFixed(5);
-  let html=`<div class="popup-wrap">`;
+  let html=`<div class="photo-card">`;
   if(p.thumb)html+=`<img class="popup-img" src="${p.thumb}" alt="${p.name}" onclick="openLightbox('${p.id}')">`;
   html+=`<div class="popup-name">${p.name}</div>`;
   html+=`<div class="popup-badges"><span class="popup-brand-badge" style="background:${color}">${label}</span>`;
   if(p.manual)html+=`<span class="popup-source-tag">manual pin</span>`;
-  html+=`</div><div class="popup-coords">${lat}, ${lng}</div>`;
+  html+=`</div>`;
   if(!p.used){
-    html+=`<div class="popup-actions">
-      <button class="btn-used" onclick="markUsed('${p.id}')">Mark used</button>
-      <button class="btn-remove" onclick="removePhoto('${p.id}')">Remove</button>
-    </div>`;
+    html+=`<div class="popup-actions"><button class="btn-used" onclick="markUsed('${p.id}')">Mark used</button><button class="btn-remove" onclick="removePhoto('${p.id}')">Remove</button></div>`;
   }else{
     html+=`<button class="btn-undo" onclick="undoUsed('${p.id}')">Undo — mark unused</button>`;
   }
   if(p.driveId){
     html+=`<button class="btn-download" onclick="downloadDriveFile('${p.driveId}','${p.name}')"><i class="ti ti-download" style="font-size:13px"></i> Download full resolution</button>`;
+  }
+  html+=`</div>`;return html;
+}
+
+function buildPopup(photosAtLoc){
+  const lat=parseFloat(photosAtLoc[0].lat).toFixed(5),lng=parseFloat(photosAtLoc[0].lng).toFixed(5);
+  const total=photosAtLoc.length;
+  let html=`<div class="popup-wrap">`;
+  if(total>1){
+    html+=`<div class="popup-location-header">${total} photos at this location<div class="popup-coords">${lat}, ${lng}</div></div>`;
+    html+=`<div class="photo-card-scroll">`;
+    photosAtLoc.forEach((p,i)=>{
+      if(i>0)html+=`<div class="photo-card-divider"></div>`;
+      html+=buildPhotoCard(p);
+    });
+    html+=`</div>`;
+  }else{
+    html+=`<div class="popup-coords">${lat}, ${lng}</div>`;
+    html+=buildPhotoCard(photosAtLoc[0]);
   }
   html+=`</div>`;return html;
 }
@@ -328,21 +344,59 @@ window.openLightbox=function(id){
 };
 window.closeLightbox=function(){document.getElementById('lightbox').style.display='none';};
 
+// Location-grouped marker system
+// locMarkers: keyed by locKey, one marker per unique location
+let locMarkers={};
+
+function getPhotosAtLoc(key){
+  return photos.filter(p=>locKey(p)===key);
+}
+
+function isLocVisible(key){
+  const ps=getPhotosAtLoc(key);
+  return ps.some(p=>(activeBrand==='all'||activeBrand===p.brand)&&(showUsed||!p.used));
+}
+
+function getPrimaryBrand(ps){
+  // use brand of first non-used, or first overall
+  const active=ps.find(p=>!p.used);
+  return(active||ps[0]).brand;
+}
+
+function rebuildLocMarker(key){
+  const ps=getPhotosAtLoc(key);
+  if(!ps.length){
+    if(locMarkers[key]){map.removeLayer(locMarkers[key]);delete locMarkers[key];}
+    return;
+  }
+  const visible=isLocVisible(key);
+  const brand=getPrimaryBrand(ps);
+  if(locMarkers[key]){
+    locMarkers[key].setIcon(makeIcon(ps,brand));
+    locMarkers[key].setPopupContent(buildPopup(ps));
+    if(visible&&!map.hasLayer(locMarkers[key]))locMarkers[key].addTo(map);
+    if(!visible&&map.hasLayer(locMarkers[key]))map.removeLayer(locMarkers[key]);
+  }else{
+    const marker=L.marker([ps[0].lat,ps[0].lng],{icon:makeIcon(ps,brand)})
+      .bindPopup(buildPopup(ps),{maxWidth:280,minWidth:250});
+    if(visible)marker.addTo(map);
+    locMarkers[key]=marker;
+  }
+}
+
 function addMarker(p){
-  const marker=L.marker([p.lat,p.lng],{icon:makeIcon(p.brand,p.used)})
-    .bindPopup(()=>buildPopup(p),{maxWidth:260,minWidth:240});
-  const visible=(activeBrand==='all'||activeBrand===p.brand)&&(showUsed||!p.used);
-  if(visible)marker.addTo(map);
-  markers[p.id]=marker;
+  // store on markers for legacy lookups, but visual is handled by locMarkers
+  markers[p.id]=true;
+  rebuildLocMarker(locKey(p));
 }
 function refreshMarker(p){
-  if(!markers[p.id])return;
-  markers[p.id].setIcon(makeIcon(p.brand,p.used));
-  const visible=(activeBrand==='all'||activeBrand===p.brand)&&(showUsed||!p.used);
-  if(visible){if(!map.hasLayer(markers[p.id]))markers[p.id].addTo(map);}
-  else{if(map.hasLayer(markers[p.id]))map.removeLayer(markers[p.id]);}
+  rebuildLocMarker(locKey(p));
 }
-function applyFilters(){photos.forEach(p=>refreshMarker(p));updateStats();}
+function applyFilters(){
+  const keys=new Set(photos.map(p=>locKey(p)));
+  keys.forEach(k=>rebuildLocMarker(k));
+  updateStats();
+}
 function updateStats(){
   const unused=photos.filter(p=>!p.used).length,used=photos.filter(p=>p.used).length;
   document.getElementById('stats').textContent=`${unused} unused · ${used} used`;
@@ -352,17 +406,25 @@ function checkNoPhotos(){
   document.getElementById('no-photos').style.display=(photos.length===0&&pending.length===0)?'block':'none';
 }
 
-window.markUsed=function(id){const p=photos.find(x=>x.id===id);if(!p)return;p.used=true;save();refreshMarker(p);updateStats();map.closePopup();};
-window.undoUsed=function(id){const p=photos.find(x=>x.id===id);if(!p)return;p.used=false;save();refreshMarker(p);updateStats();map.closePopup();};
+window.markUsed=function(id){
+  const p=photos.find(x=>x.id===id);if(!p)return;
+  const key=locKey(p);p.used=true;save();rebuildLocMarker(key);updateStats();map.closePopup();
+};
+window.undoUsed=function(id){
+  const p=photos.find(x=>x.id===id);if(!p)return;
+  const key=locKey(p);p.used=false;save();rebuildLocMarker(key);updateStats();map.closePopup();
+};
 window.removePhoto=function(id){
   const idx=photos.findIndex(x=>x.id===id);if(idx===-1)return;
-  if(markers[id]){map.removeLayer(markers[id]);delete markers[id];}
-  photos.splice(idx,1);save();updateStats();map.closePopup();
+  const key=locKey(photos[idx]);
+  delete markers[id];
+  photos.splice(idx,1);
+  rebuildLocMarker(key);
+  save();updateStats();map.closePopup();
 };
 
 // Auth — shared between upload and picker
 function ensureAuth(callback){
-  if(!config.clientId){showConfig();return;}
   if(oauthToken){callback();return;}
   function doAuth(){
     const client=google.accounts.oauth2.initTokenClient({
@@ -470,7 +532,6 @@ function getThumb(file){
 
 // Upload flow
 function triggerUpload(){
-  if(!config.clientId){showConfig();return;}
   document.getElementById('file-input').click();
 }
 
