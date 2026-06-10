@@ -61,6 +61,7 @@
   .btn-save{font-size:13px;padding:7px 16px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);}
   .btn-save:hover{background:var(--blue-dark);}
   #manual-panel{display:none;border-bottom:0.5px solid var(--border-light);background:var(--bg-secondary);flex-shrink:0;}
+  body.tech-mode #manual-panel{display:none!important;}
   #manual-header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;cursor:pointer;}
   #manual-header-left{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;}
   #manual-badge{background:var(--red);color:#fff;font-size:11px;font-weight:500;padding:1px 7px;border-radius:10px;}
@@ -117,16 +118,24 @@
   .toast.fade{opacity:0;}
   #lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:5000;align-items:center;justify-content:center;cursor:zoom-out;}
   #lightbox img{max-width:92vw;max-height:92vh;border-radius:var(--radius-md);object-fit:contain;}
+  /* Tech mode */
+  body.tech-mode .marketer-only{display:none!important;}
+  #tech-banner{display:none;padding:8px 16px;background:var(--green);color:#fff;font-size:13px;align-items:center;justify-content:center;gap:8px;flex-shrink:0;font-weight:500;}
+  body.tech-mode #tech-banner{display:flex;}
 </style>
 </head>
 <body>
 <div id="app">
+  <div id="tech-banner">
+    <i class="ti ti-camera" style="font-size:16px"></i>
+    Tech upload mode — drop photos or tap Upload to Drive
+  </div>
   <div id="toolbar">
     <button class="icon-btn success" id="upload-btn" onclick="triggerUpload()">
       <i class="ti ti-cloud-upload"></i> Upload to Drive
     </button>
     <input type="file" id="file-input" multiple accept="image/*" style="display:none">
-    <button class="icon-btn primary" id="drive-btn" onclick="openDrivePicker()">
+    <button class="icon-btn primary marketer-only" id="drive-btn" onclick="openDrivePicker()">
       <i class="ti ti-brand-google-drive"></i> Add from Drive
     </button>
     <div class="tb-group">
@@ -136,10 +145,10 @@
       <button class="filter-btn" data-brand="newage">New Age Lights</button>
     </div>
     <div class="toolbar-right">
-      <button class="toggle-used" id="toggle-used-btn">Show used</button>
-      <span id="stats">0 unused · 0 used</span>
-      <button class="icon-btn" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
-      <label class="icon-btn" style="cursor:pointer">
+      <button class="toggle-used marketer-only" id="toggle-used-btn">Show used</button>
+      <span id="stats" class="marketer-only">0 unused · 0 used</span>
+      <button class="icon-btn marketer-only" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
+      <label class="icon-btn marketer-only" style="cursor:pointer">
         <i class="ti ti-file-import"></i> Import CSV
         <input type="file" id="csv-input" accept=".csv" style="display:none">
       </label>
@@ -206,21 +215,26 @@ const STORAGE_KEY='gbp_photo_map_v6';
 const PENDING_KEY='gbp_photo_pending_v6';
 const CONFIG_KEY='gbp_config_v1';
 const FOLDER_KEY='gbp_drive_folder_id';
+const DATA_FILE_KEY='gbp_drive_data_file_id';
 const DRIVE_FOLDER_NAME='GBP Photo Inventory';
+const DRIVE_DATA_FILENAME='gbp-map-data.json';
 
 const map=L.map('map',{zoomControl:true}).setView([35.5,-86.5],6);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);
 
 let photos=[],pending=[],markers={};
 let activeBrand='all',showUsed=false,panelOpen=true;
-let pickerApiLoaded=false,oauthToken=null,driveFolderId=null;
+let pickerApiLoaded=false,oauthToken=null,driveFolderId=null,driveDataFileId=null,saveTimer=null;
 let suggestTimers={};
 let config={clientId:'788046954081-1ojin1jscuit4vujd76qcinm3hjsgiq4.apps.googleusercontent.com',domain:'eloveland-bit.github.io'};
+const isTechMode=new URLSearchParams(window.location.search).has('upload');
+if(isTechMode)document.body.classList.add('tech-mode');
 
 // Config
 function loadConfig(){
   try{const c=localStorage.getItem(CONFIG_KEY);if(c)config=JSON.parse(c);}catch(e){}
   try{driveFolderId=localStorage.getItem(FOLDER_KEY)||null;}catch(e){}
+  try{driveDataFileId=localStorage.getItem(DATA_FILE_KEY)||null;}catch(e){}
   updateSetupBanner();
 }
 function saveConfig(){
@@ -250,17 +264,127 @@ function showLoading(msg,progress){
 function updateLoadingProgress(text){document.getElementById('loading-progress').textContent=text;}
 function hideLoading(){document.getElementById('loading-overlay').style.display='none';}
 
-function save(){
-  const toStore=photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,manual:p.manual||false,driveId:p.driveId||null}));
-  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(toStore));}
-  catch(e){toast('Storage full — export CSV to back up.');}
-  try{localStorage.setItem(PENDING_KEY,JSON.stringify(pending.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,driveId:p.driveId||null}))));}catch(e){}
+// Serialize current state
+function getStateData(){
+  return {
+    photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,manual:p.manual||false,driveId:p.driveId||null})),
+    pending: pending.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,driveId:p.driveId||null}))
+  };
 }
 
-function load(){
-  try{const r=localStorage.getItem(STORAGE_KEY);if(r){photos=JSON.parse(r);photos.forEach(p=>addMarker(p));}}catch(e){}
-  try{const r=localStorage.getItem(PENDING_KEY);if(r){pending=JSON.parse(r);renderPendingPanel();}}catch(e){}
+// Save to Drive (debounced 1.5s so rapid changes batch together)
+function save(){
+  // Always cache locally immediately
+  try{
+    const d=getStateData();
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(d.photos));
+    localStorage.setItem(PENDING_KEY,JSON.stringify(d.pending));
+  }catch(e){}
+  // Debounce Drive save
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>saveToDrive(),1500);
+}
+
+async function saveToDrive(){
+  if(!oauthToken)return; // not signed in yet, local cache is fine
+  try{
+    const folderId=await getOrCreateFolder();
+    const data=JSON.stringify(getStateData());
+    const blob=new Blob([data],{type:'application/json'});
+    if(driveDataFileId){
+      // Update existing file
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveDataFileId}?uploadType=media`,{
+        method:'PATCH',
+        headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+        body:blob
+      });
+    }else{
+      // Find or create the data file
+      const existing=await findDataFile(folderId);
+      if(existing){
+        driveDataFileId=existing;
+        localStorage.setItem(DATA_FILE_KEY,driveDataFileId);
+        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveDataFileId}?uploadType=media`,{
+          method:'PATCH',
+          headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+          body:blob
+        });
+      }else{
+        const form=new FormData();
+        form.append('metadata',new Blob([JSON.stringify({name:DRIVE_DATA_FILENAME,parents:[folderId]})],{type:'application/json'}));
+        form.append('file',blob);
+        const resp=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{
+          method:'POST',headers:{Authorization:`Bearer ${oauthToken}`},body:form
+        });
+        const created=await resp.json();
+        driveDataFileId=created.id;
+        localStorage.setItem(DATA_FILE_KEY,driveDataFileId);
+      }
+    }
+  }catch(e){console.error('Drive save failed:',e);}
+}
+
+async function findDataFile(folderId){
+  try{
+    const r=await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_DATA_FILENAME}' and '${folderId}' in parents and trashed=false&fields=files(id)`,
+      {headers:{Authorization:`Bearer ${oauthToken}`}}
+    );
+    const d=await r.json();
+    return d.files&&d.files.length>0?d.files[0].id:null;
+  }catch(e){return null;}
+}
+
+// Load from Drive if signed in, fall back to localStorage cache
+async function load(){
+  // Show local cache immediately so map isn't blank
+  try{
+    const r=localStorage.getItem(STORAGE_KEY);
+    const rp=localStorage.getItem(PENDING_KEY);
+    if(r){photos=JSON.parse(r);photos.forEach(p=>addMarker(p));}
+    if(rp){pending=JSON.parse(rp);renderPendingPanel();}
+  }catch(e){}
   updateStats();checkNoPhotos();
+  // Then load from Drive once signed in (called after auth)
+}
+
+async function loadFromDrive(){
+  try{
+    const folderId=await getOrCreateFolder();
+    // Check cached file ID first
+    if(!driveDataFileId){
+      const cached=localStorage.getItem(DATA_FILE_KEY);
+      if(cached)driveDataFileId=cached;
+      else driveDataFileId=await findDataFile(folderId);
+      if(driveDataFileId)localStorage.setItem(DATA_FILE_KEY,driveDataFileId);
+    }
+    if(!driveDataFileId){
+      // No data file yet — this is a fresh setup, nothing to load
+      return;
+    }
+    const resp=await fetch(`https://www.googleapis.com/drive/v3/files/${driveDataFileId}?alt=media`,{
+      headers:{Authorization:`Bearer ${oauthToken}`}
+    });
+    if(!resp.ok)return;
+    const data=await resp.json();
+    if(!data.photos)return;
+    // Clear current state and rebuild from Drive
+    Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
+    locMarkers={};markers={};
+    photos=data.photos||[];
+    pending=data.pending||[];
+    photos.forEach(p=>addMarker(p));
+    // Update local cache
+    try{
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(photos));
+      localStorage.setItem(PENDING_KEY,JSON.stringify(pending));
+    }catch(e){}
+    renderPendingPanel();updateStats();checkNoPhotos();
+    if(photos.length>0){
+      const bounds=L.latLngBounds(photos.map(p=>[p.lat,p.lng]));
+      map.fitBounds(bounds,{padding:[60,60]});
+    }
+  }catch(e){console.error('Drive load failed:',e);}
 }
 
 function guessBrand(name){
@@ -294,10 +418,12 @@ function buildPhotoCard(p){
   html+=`<div class="popup-badges"><span class="popup-brand-badge" style="background:${color}">${label}</span>`;
   if(p.manual)html+=`<span class="popup-source-tag">manual pin</span>`;
   html+=`</div>`;
-  if(!p.used){
-    html+=`<div class="popup-actions"><button class="btn-used" onclick="markUsed('${p.id}')">Mark used</button><button class="btn-remove" onclick="removePhoto('${p.id}')">Remove</button></div>`;
-  }else{
-    html+=`<button class="btn-undo" onclick="undoUsed('${p.id}')">Undo — mark unused</button>`;
+  if(!isTechMode){
+    if(!p.used){
+      html+=`<div class="popup-actions"><button class="btn-used" onclick="markUsed('${p.id}')">Mark used</button><button class="btn-remove" onclick="removePhoto('${p.id}')">Remove</button></div>`;
+    }else{
+      html+=`<button class="btn-undo" onclick="undoUsed('${p.id}')">Undo — mark unused</button>`;
+    }
   }
   if(p.driveId){
     html+=`<button class="btn-download" onclick="downloadDriveFile('${p.driveId}','${p.name}')"><i class="ti ti-download" style="font-size:13px"></i> Download full resolution</button>`;
@@ -433,7 +559,8 @@ function ensureAuth(callback){
       callback:(resp)=>{
         if(resp.error){toast('Drive sign-in failed: '+resp.error);return;}
         oauthToken=resp.access_token;
-        callback();
+        // Sync from Drive on every sign-in so all devices stay current
+        loadFromDrive().then(()=>callback());
       }
     });
     client.requestAccessToken({prompt:''});
@@ -766,6 +893,31 @@ document.getElementById('toggle-used-btn').addEventListener('click',function(){
 document.addEventListener('keydown',(e)=>{if(e.key==='Escape')closeLightbox();});
 
 loadConfig();load();loadPickerApi();
+// Auto sign-in silently on page load so Drive syncs without user action
+window.addEventListener('load',()=>{
+  if(window.google&&window.google.accounts){
+    tryAutoSignIn();
+  }else{
+    const s=document.createElement('script');
+    s.src='https://accounts.google.com/gsi/client';
+    s.onload=()=>{loadPickerApi();setTimeout(tryAutoSignIn,500);};
+    document.body.appendChild(s);
+  }
+});
+function tryAutoSignIn(){
+  try{
+    const client=google.accounts.oauth2.initTokenClient({
+      client_id:config.clientId,
+      scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+      callback:(resp)=>{
+        if(resp.error||!resp.access_token)return;
+        oauthToken=resp.access_token;
+        loadFromDrive();
+      }
+    });
+    client.requestAccessToken({prompt:''});
+  }catch(e){}
+}
 </script>
 </body>
 </html>
