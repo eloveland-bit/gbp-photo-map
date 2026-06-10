@@ -608,7 +608,13 @@ function isLocVisible(key){
 }
 
 function getPrimaryBrand(ps){
-  // use brand of first non-used, or first overall
+  // If filtered to a specific brand, use that brand's color
+  if(activeBrand!=='all'){
+    const match=ps.find(p=>p.brand===activeBrand&&!p.used);
+    const matchUsed=ps.find(p=>p.brand===activeBrand);
+    if(match||matchUsed)return activeBrand;
+  }
+  // Otherwise use brand of first non-used, or first overall
   const active=ps.find(p=>!p.used);
   return(active||ps[0]).brand;
 }
