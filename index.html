@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+\<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -424,12 +424,31 @@ async function loadFromDrive(){
     if(!resp.ok)return;
     const data=await resp.json();
     if(!data.photos)return;
-    // Clear current state and rebuild from Drive
+
+    // MERGE — never overwrite, always combine
+    // Drive is the base. Any local photo not in Drive gets added. 
+    // For photos in both, Drive version of 'used' wins (marketer's decisions are authoritative).
+    const drivePhotos = data.photos || [];
+    const drivePending = data.pending || [];
+    const driveIds = new Set(drivePhotos.map(p=>p.id));
+    const driveDriveFileIds = new Set(drivePhotos.map(p=>p.driveId).filter(Boolean));
+
+    // Local photos not in Drive (added since last sync) — keep them
+    const localOnly = photos.filter(p => !driveIds.has(p.id) && !driveDriveFileIds.has(p.driveId));
+    const localPendingOnly = pending.filter(p => !drivePending.find(dp=>dp.id===p.id));
+
+    // Rebuild from merged set
     Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
-    photos=data.photos||[];
-    pending=data.pending||[];
+    photos = [...drivePhotos, ...localOnly];
+    pending = [...drivePending, ...localPendingOnly];
     photos.forEach(p=>addMarker(p));
+
+    // If we had local-only items, push merged state back to Drive immediately
+    if(localOnly.length > 0 || localPendingOnly.length > 0){
+      await saveToDrive();
+    }
+
     // Update local cache
     try{
       localStorage.setItem(STORAGE_KEY,JSON.stringify(photos));
