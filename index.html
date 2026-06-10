@@ -118,6 +118,13 @@
   .toast.fade{opacity:0;}
   #lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:5000;align-items:center;justify-content:center;cursor:zoom-out;}
   #lightbox img{max-width:92vw;max-height:92vh;border-radius:var(--radius-md);object-fit:contain;}
+  #access-banner{display:none;position:fixed;inset:0;background:var(--bg-primary);z-index:6000;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;}
+  #access-banner i{font-size:48px;color:var(--text-tertiary);margin-bottom:16px;}
+  #access-banner h2{font-size:20px;font-weight:500;margin-bottom:8px;}
+  #access-banner p{font-size:14px;color:var(--text-secondary);margin-bottom:24px;max-width:320px;line-height:1.6;}
+  #access-banner .btn-request{display:inline-flex;align-items:center;gap:8px;font-size:14px;padding:10px 22px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);text-decoration:none;}
+  #access-banner .btn-request:hover{background:var(--blue-dark);}
+  #access-banner .btn-already{margin-top:12px;font-size:13px;color:var(--text-secondary);background:none;border:none;cursor:pointer;font-family:var(--font);text-decoration:underline;}
   /* Tech mode */
   body.tech-mode .marketer-only{display:none!important;}
   #tech-banner{display:none;padding:8px 16px;background:var(--green);color:#fff;font-size:13px;align-items:center;justify-content:center;gap:8px;flex-shrink:0;font-weight:500;}
@@ -137,6 +144,9 @@
     <input type="file" id="file-input" multiple accept="image/*" style="display:none">
     <button class="icon-btn primary marketer-only" id="drive-btn" onclick="openDrivePicker()">
       <i class="ti ti-brand-google-drive"></i> Add from Drive
+    </button>
+    <button class="icon-btn" id="sync-btn" onclick="manualSync()">
+      <i class="ti ti-refresh"></i> <span id="sync-label">Sync</span>
     </button>
     <div class="tb-group">
       <button class="filter-btn active" data-brand="all">All</button>
@@ -208,6 +218,16 @@
 
 <div id="lightbox" onclick="closeLightbox()">
   <img id="lightbox-img" src="" alt="Full size preview">
+</div>
+
+<div id="access-banner">
+  <i class="ti ti-lock"></i>
+  <h2>Access required</h2>
+  <p>This tool is for the Mosquito Squad, Lawn Squad, and New Age Lights team. Request access and you'll be added within 24 hours.</p>
+  <a class="btn-request" id="request-link" href="#">
+    <i class="ti ti-mail" style="font-size:16px"></i> Request access
+  </a>
+  <button class="btn-already" onclick="manualSync()">I already have access — sign in</button>
 </div>
 
 <script>
@@ -470,6 +490,18 @@ window.openLightbox=function(id){
 };
 window.closeLightbox=function(){document.getElementById('lightbox').style.display='none';};
 
+function showAccessBanner(){
+  const banner=document.getElementById('access-banner');
+  const link=document.getElementById('request-link');
+  const subject=encodeURIComponent('GBP Photo Map — Access Request');
+  const body=encodeURIComponent('Hi Emmaleigh,\n\nI\'d like access to the GBP Photo Inventory Map.\n\nMy Google account email is: [your Google email here]\n\nThanks!');
+  link.href=`mailto:eloveland@mosquitosquadplus.com?subject=${subject}&body=${body}`;
+  banner.style.display='flex';
+}
+function hideAccessBanner(){
+  document.getElementById('access-banner').style.display='none';
+}
+
 // Location-grouped marker system
 // locMarkers: keyed by locKey, one marker per unique location
 let locMarkers={};
@@ -557,8 +589,16 @@ function ensureAuth(callback){
       client_id:config.clientId,
       scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
       callback:(resp)=>{
-        if(resp.error){toast('Drive sign-in failed: '+resp.error);return;}
+        if(resp.error){
+          if(resp.error==='access_denied'||resp.error==='interaction_required'||resp.error==='login_required'){
+            showAccessBanner();
+          }else{
+            toast('Drive sign-in failed: '+resp.error);
+          }
+          return;
+        }
         oauthToken=resp.access_token;
+        hideAccessBanner();
         // Sync from Drive on every sign-in so all devices stay current
         loadFromDrive().then(()=>callback());
       }
@@ -904,18 +944,51 @@ window.addEventListener('load',()=>{
     document.body.appendChild(s);
   }
 });
+function setSyncState(state){
+  const btn=document.getElementById('sync-btn');
+  const label=document.getElementById('sync-label');
+  if(!btn||!label)return;
+  if(state==='syncing'){
+    btn.style.opacity='0.6';btn.style.pointerEvents='none';
+    label.textContent='Syncing...';
+  }else if(state==='synced'){
+    btn.style.opacity='1';btn.style.pointerEvents='auto';
+    label.textContent='Synced';
+    btn.style.color='var(--green)';
+    setTimeout(()=>{label.textContent='Sync';btn.style.color='';},2500);
+  }else{
+    btn.style.opacity='1';btn.style.pointerEvents='auto';
+    label.textContent='Sync';btn.style.color='';
+  }
+}
+
+function manualSync(){
+  setSyncState('syncing');
+  ensureAuth(async()=>{
+    await loadFromDrive();
+    setSyncState('synced');
+  });
+}
+
 function tryAutoSignIn(){
   try{
     const client=google.accounts.oauth2.initTokenClient({
       client_id:config.clientId,
       scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
       callback:(resp)=>{
-        if(resp.error||!resp.access_token)return;
+        if(resp.error||!resp.access_token){
+          // Silent sign-in failed — show access banner so user can request or sign in manually
+          if(resp.error&&resp.error!=='suppressed_by_user')showAccessBanner();
+          return;
+        }
         oauthToken=resp.access_token;
-        loadFromDrive();
+        hideAccessBanner();
+        setSyncState('syncing');
+        loadFromDrive().then(()=>setSyncState('synced'));
       }
     });
-    client.requestAccessToken({prompt:''});
+    // Use prompt:'none' to try silently — works on desktop, fails gracefully on mobile
+    client.requestAccessToken({prompt:'none'});
   }catch(e){}
 }
 </script>
