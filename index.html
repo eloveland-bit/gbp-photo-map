@@ -732,6 +732,55 @@ function triggerUpload(){
   document.getElementById('file-input').click();
 }
 
+// Market definitions — bounding boxes for each market
+const MARKETS = [
+  { name: 'Chattanooga', bounds: { minLat: 34.85, maxLat: 35.25, minLng: -85.55, maxLng: -85.05 } },
+  { name: 'Knoxville',   bounds: { minLat: 35.75, maxLat: 36.20, minLng: -84.25, maxLng: -83.65 } },
+  { name: 'Huntsville',  bounds: { minLat: 34.55, maxLat: 34.90, minLng: -86.75, maxLng: -86.35 } },
+  { name: 'Birmingham',  bounds: { minLat: 33.35, maxLat: 33.65, minLng: -87.05, maxLng: -86.55 } },
+  { name: 'Cincinnati',  bounds: { minLat: 39.00, maxLat: 39.35, minLng: -84.75, maxLng: -84.25 } },
+  { name: 'Northern Kentucky', bounds: { minLat: 38.85, maxLat: 39.10, minLng: -84.75, maxLng: -84.15 } },
+  { name: 'Dayton',      bounds: { minLat: 39.55, maxLat: 39.90, minLng: -84.35, maxLng: -84.00 } },
+];
+
+function detectMarket(lat, lng) {
+  for (const m of MARKETS) {
+    const b = m.bounds;
+    if (lat >= b.minLat && lat <= b.maxLat && lng >= b.minLng && lng <= b.maxLng) {
+      return m.name;
+    }
+  }
+  return null;
+}
+
+// Cache of subfolder IDs: "Brand — Market" -> Drive folder ID
+const subFolderCache = {};
+
+async function getOrCreateSubFolder(brand, market) {
+  const label = `${brandLabels[brand] || brand} — ${market}`;
+  if (subFolderCache[label]) return subFolderCache[label];
+  const parentId = HARDCODED_FOLDER_ID;
+  // Search for existing subfolder
+  const search = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(label)}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+    { headers: { Authorization: `Bearer ${oauthToken}` } }
+  );
+  const searchData = await search.json();
+  if (searchData.files && searchData.files.length > 0) {
+    subFolderCache[label] = searchData.files[0].id;
+    return subFolderCache[label];
+  }
+  // Create it
+  const create = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${oauthToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: label, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
+  });
+  const created = await create.json();
+  subFolderCache[label] = created.id;
+  return created.id;
+}
+
 async function processUploadFiles(files){
   if(!files.length)return;
   ensureAuth(async()=>{
@@ -746,17 +795,25 @@ async function processUploadFiles(files){
       if(photos.find(p=>p.name===file.name)||pending.find(p=>p.name===file.name))continue;
       updateLoadingProgress(`${i+1} of ${files.length} — ${file.name}`);
       try{
-        const [driveFile,thumb,coords]=await Promise.all([
-          uploadFileToDrive(file,folderId),
-          getThumb(file),
-          extractEXIF(file)
-        ]);
+        const [thumb,coords]=await Promise.all([getThumb(file),extractEXIF(file)]);
+        const brand=guessBrand(file.name);
         const id=Date.now()+Math.random().toString(36).slice(2);
+        // Determine target folder — subfolder if GPS known, root folder otherwise
+        let targetFolderId=folderId;
+        let market=null;
         if(coords){
-          const p={id,name:file.name,lat:coords.lat,lng:coords.lng,brand:guessBrand(file.name),used:false,thumb,driveId:driveFile.id,manual:false};
+          market=detectMarket(coords.lat,coords.lng);
+          if(market){
+            try{targetFolderId=await getOrCreateSubFolder(brand,market);}
+            catch(e){targetFolderId=folderId;} // fall back to root if subfolder fails
+          }
+        }
+        const driveFile=await uploadFileToDrive(file,targetFolderId);
+        if(coords){
+          const p={id,name:file.name,lat:coords.lat,lng:coords.lng,brand,used:false,thumb,driveId:driveFile.id,manual:false,market:market||'Unknown'};
           photos.push(p);addMarker(p);refreshMarker(p);added++;
         }else{
-          pending.push({id,name:file.name,brand:guessBrand(file.name),thumb,driveId:driveFile.id});
+          pending.push({id,name:file.name,brand,thumb,driveId:driveFile.id});
           noGps++;
         }
       }catch(e){console.error('Failed:',file.name,e);failed++;}
