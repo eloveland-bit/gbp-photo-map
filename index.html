@@ -1,4 +1,4 @@
-\<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -476,8 +476,12 @@ const brandLabels={mosquito:'Mosquito Squad',lawn:'Lawn Squad',newage:'New Age L
 function locKey(p){return `${parseFloat(p.lat).toFixed(5)},${parseFloat(p.lng).toFixed(5)}`;}
 
 function makeIcon(photosAtLoc,brand){
-  const allUsed=photosAtLoc.every(p=>p.used);
-  const count=photosAtLoc.length;
+  // Only count photos that are visible under the current filter
+  const visiblePhotos=photosAtLoc.filter(p=>
+    (activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used)
+  );
+  const allUsed=visiblePhotos.length>0&&visiblePhotos.every(p=>p.used);
+  const count=visiblePhotos.length;
   const color=allUsed?'#aaa':(brandColors[brand]||'#444');
   const badge=count>1?`<div style="position:absolute;top:-4px;right:-4px;background:#E24B4A;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;font-family:sans-serif;border:1.5px solid #fff;">${count}</div>`:'';
   const svg=`<div style="position:relative;display:inline-block;"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36"><path d="M14 0C6.27 0 0 6.27 0 14c0 9.33 14 22 14 22S28 23.33 28 14C28 6.27 21.73 0 14 0z" fill="${color}" opacity="${allUsed?0.45:1}"/><circle cx="14" cy="14" r="6" fill="white" opacity="0.9"/></svg>${badge}</div>`;
@@ -507,20 +511,26 @@ function buildPhotoCard(p){
 }
 
 function buildPopup(photosAtLoc){
-  const lat=parseFloat(photosAtLoc[0].lat).toFixed(5),lng=parseFloat(photosAtLoc[0].lng).toFixed(5);
-  const total=photosAtLoc.length;
+  // Only show photos matching current filter in the popup
+  const visible=photosAtLoc.filter(p=>
+    (activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used)
+  );
+  // Fall back to all photos if filter produces nothing (shouldn't happen but safety net)
+  const toShow=visible.length>0?visible:photosAtLoc;
+  const lat=parseFloat(toShow[0].lat).toFixed(5),lng=parseFloat(toShow[0].lng).toFixed(5);
+  const total=toShow.length;
   let html=`<div class="popup-wrap">`;
   if(total>1){
-    html+=`<div class="popup-location-header">${total} photos at this location<div class="popup-coords">${lat}, ${lng}</div></div>`;
+    html+=`<div class="popup-location-header">${total} photo${total!==1?'s':''} at this location<div class="popup-coords">${lat}, ${lng}</div></div>`;
     html+=`<div class="photo-card-scroll">`;
-    photosAtLoc.forEach((p,i)=>{
+    toShow.forEach((p,i)=>{
       if(i>0)html+=`<div class="photo-card-divider"></div>`;
       html+=buildPhotoCard(p);
     });
     html+=`</div>`;
   }else{
     html+=`<div class="popup-coords">${lat}, ${lng}</div>`;
-    html+=buildPhotoCard(photosAtLoc[0]);
+    html+=buildPhotoCard(toShow[0]);
   }
   html+=`</div>`;return html;
 }
