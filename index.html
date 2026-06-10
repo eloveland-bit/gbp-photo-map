@@ -119,12 +119,17 @@
   #lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:5000;align-items:center;justify-content:center;cursor:zoom-out;}
   #lightbox img{max-width:92vw;max-height:92vh;border-radius:var(--radius-md);object-fit:contain;}
   #access-banner{display:none;position:fixed;inset:0;background:var(--bg-primary);z-index:6000;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;}
+  #access-screen-request,#access-screen-sent{display:flex;flex-direction:column;align-items:center;max-width:340px;width:100%;}
   #access-banner i{font-size:48px;color:var(--text-tertiary);margin-bottom:16px;}
   #access-banner h2{font-size:20px;font-weight:500;margin-bottom:8px;}
   #access-banner p{font-size:14px;color:var(--text-secondary);margin-bottom:24px;max-width:320px;line-height:1.6;}
-  #access-banner .btn-request{display:inline-flex;align-items:center;gap:8px;font-size:14px;padding:10px 22px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);text-decoration:none;}
+  .access-form{display:flex;flex-direction:column;gap:10px;width:100%;margin-bottom:16px;}
+  .access-form input{width:100%;font-size:14px;padding:10px 12px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);font-family:var(--font);}
+  .access-form input:focus{outline:none;border-color:var(--blue);}
+  #access-banner .btn-request{display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;padding:11px 22px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);text-decoration:none;width:100%;}
   #access-banner .btn-request:hover{background:var(--blue-dark);}
   #access-banner .btn-already{margin-top:12px;font-size:13px;color:var(--text-secondary);background:none;border:none;cursor:pointer;font-family:var(--font);text-decoration:underline;}
+  #access-screen-sent i{color:var(--green);}
   /* Tech mode */
   body.tech-mode .marketer-only{display:none!important;}
   #tech-banner{display:none;padding:8px 16px;background:var(--green);color:#fff;font-size:13px;align-items:center;justify-content:center;gap:8px;flex-shrink:0;font-weight:500;}
@@ -221,13 +226,25 @@
 </div>
 
 <div id="access-banner">
-  <i class="ti ti-lock"></i>
-  <h2>Access required</h2>
-  <p>This tool is for the Mosquito Squad, Lawn Squad, and New Age Lights team. Request access and you'll be added within 24 hours.</p>
-  <a class="btn-request" id="request-link" href="#">
-    <i class="ti ti-mail" style="font-size:16px"></i> Request access
-  </a>
-  <button class="btn-already" onclick="manualSync()">I already have access — sign in</button>
+  <div id="access-screen-request">
+    <i class="ti ti-lock"></i>
+    <h2>Access required</h2>
+    <p>This tool is for the Mosquito Squad, Lawn Squad, and New Age Lights team. Fill in your details and request access — you'll hear back within 24 hours.</p>
+    <div class="access-form">
+      <input type="text" id="req-name" placeholder="Your name" autocomplete="name">
+      <input type="email" id="req-email" placeholder="Your Google account email" autocomplete="email">
+      <a class="btn-request" id="request-link" href="#" onclick="submitAccessRequest(event)">
+        <i class="ti ti-mail" style="font-size:16px"></i> Send access request
+      </a>
+    </div>
+    <button class="btn-already" onclick="manualSync()">I already have access — sign in</button>
+  </div>
+  <div id="access-screen-sent" style="display:none">
+    <i class="ti ti-circle-check" style="color:var(--green)"></i>
+    <h2>Request sent!</h2>
+    <p>Your request has been sent to the map admin. You'll receive an email once you've been added — usually within 24 hours.</p>
+    <button class="btn-already" onclick="manualSync()">I've been approved — sign in now</button>
+  </div>
 </div>
 
 <script>
@@ -235,6 +252,7 @@ const STORAGE_KEY='gbp_photo_map_v6';
 const PENDING_KEY='gbp_photo_pending_v6';
 const CONFIG_KEY='gbp_config_v1';
 const FOLDER_KEY='gbp_drive_folder_id';
+const HARDCODED_FOLDER_ID='1YQWcxmqLJGD6dRJmaJRUyx4XCOO0fcvv';
 const DATA_FILE_KEY='gbp_drive_data_file_id';
 const DRIVE_FOLDER_NAME='GBP Photo Inventory';
 const DRIVE_DATA_FILENAME='gbp-map-data.json';
@@ -333,7 +351,7 @@ async function saveToDrive(){
         const form=new FormData();
         form.append('metadata',new Blob([JSON.stringify({name:DRIVE_DATA_FILENAME,parents:[folderId]})],{type:'application/json'}));
         form.append('file',blob);
-        const resp=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{
+        const resp=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id&supportsAllDrives=true',{
           method:'POST',headers:{Authorization:`Bearer ${oauthToken}`},body:form
         });
         const created=await resp.json();
@@ -347,7 +365,7 @@ async function saveToDrive(){
 async function findDataFile(folderId){
   try{
     const r=await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_DATA_FILENAME}' and '${folderId}' in parents and trashed=false&fields=files(id)`,
+      `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_DATA_FILENAME}' and '${folderId}' in parents and trashed=false&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
       {headers:{Authorization:`Bearer ${oauthToken}`}}
     );
     const d=await r.json();
@@ -379,7 +397,11 @@ async function loadFromDrive(){
       if(driveDataFileId)localStorage.setItem(DATA_FILE_KEY,driveDataFileId);
     }
     if(!driveDataFileId){
-      // No data file yet — this is a fresh setup, nothing to load
+      // No data file in Drive yet — push local data up if we have any
+      if(photos.length>0||pending.length>0){
+        await saveToDrive();
+        toast('Map data saved to Drive.');
+      }
       return;
     }
     const resp=await fetch(`https://www.googleapis.com/drive/v3/files/${driveDataFileId}?alt=media`,{
@@ -491,16 +513,43 @@ window.openLightbox=function(id){
 window.closeLightbox=function(){document.getElementById('lightbox').style.display='none';};
 
 function showAccessBanner(){
-  const banner=document.getElementById('access-banner');
-  const link=document.getElementById('request-link');
-  const subject=encodeURIComponent('GBP Photo Map — Access Request');
-  const body=encodeURIComponent('Hi Emmaleigh,\n\nI\'d like access to the GBP Photo Inventory Map.\n\nMy Google account email is: [your Google email here]\n\nThanks!');
-  link.href=`mailto:eloveland@mosquitosquadplus.com?subject=${subject}&body=${body}`;
-  banner.style.display='flex';
+  document.getElementById('access-screen-request').style.display='flex';
+  document.getElementById('access-screen-sent').style.display='none';
+  document.getElementById('access-banner').style.display='flex';
 }
 function hideAccessBanner(){
   document.getElementById('access-banner').style.display='none';
 }
+
+window.submitAccessRequest=function(e){
+  e.preventDefault();
+  const name=document.getElementById('req-name').value.trim();
+  const email=document.getElementById('req-email').value.trim();
+  if(!name||!email){
+    alert('Please enter your name and Google account email.');
+    return;
+  }
+  // Build the mailto with all info + direct link to Google Cloud test users
+  const cloudLink='https://console.cloud.google.com/auth/audience?project=gbp-phoyo';
+  const driveLink='https://drive.google.com/drive/folders/';
+  const subject=encodeURIComponent('GBP Photo Map — Access Request from '+name);
+  const body=encodeURIComponent(
+    'New access request for the GBP Photo Inventory Map:\n\n' +
+    'Name: '+name+'\n' +
+    'Google account email: '+email+'\n\n' +
+    'TO APPROVE:\n' +
+    '1. Add their email as a test user here:\n' +
+    '   '+cloudLink+'\n\n' +
+    '2. Share the GBP Photo Inventory folder in Drive with: '+email+'\n\n' +
+    '3. Reply to this email to let them know they have access.\n'
+  );
+  window.location.href='mailto:eloveland@mosquitosquadplus.com?subject='+subject+'&body='+body;
+  // Show confirmation screen
+  setTimeout(()=>{
+    document.getElementById('access-screen-request').style.display='none';
+    document.getElementById('access-screen-sent').style.display='flex';
+  },500);
+};
 
 // Location-grouped marker system
 // locMarkers: keyed by locKey, one marker per unique location
@@ -627,27 +676,8 @@ function loadPickerApi(){
 
 // Drive folder management
 async function getOrCreateFolder(){
-  if(driveFolderId)return driveFolderId;
-  // Search for existing folder
-  const search=await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
-    {headers:{Authorization:`Bearer ${oauthToken}`}}
-  );
-  const searchData=await search.json();
-  if(searchData.files&&searchData.files.length>0){
-    driveFolderId=searchData.files[0].id;
-    localStorage.setItem(FOLDER_KEY,driveFolderId);
-    return driveFolderId;
-  }
-  // Create folder
-  const create=await fetch('https://www.googleapis.com/drive/v3/files',{
-    method:'POST',
-    headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
-    body:JSON.stringify({name:DRIVE_FOLDER_NAME,mimeType:'application/vnd.google-apps.folder'})
-  });
-  const createData=await create.json();
-  driveFolderId=createData.id;
-  localStorage.setItem(FOLDER_KEY,driveFolderId);
+  // Always use the hardcoded shared folder so all devices and accounts sync to the same place
+  driveFolderId=HARDCODED_FOLDER_ID;
   return driveFolderId;
 }
 
@@ -656,7 +686,7 @@ async function uploadFileToDrive(file,folderId){
   const form=new FormData();
   form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
   form.append('file',file);
-  const resp=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',{
+  const resp=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name&supportsAllDrives=true',{
     method:'POST',
     headers:{Authorization:`Bearer ${oauthToken}`},
     body:form
