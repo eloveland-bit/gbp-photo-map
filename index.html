@@ -68,6 +68,20 @@
   #manual-collapse-btn{background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:14px;}
   #manual-body{padding:0 14px 12px;display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;}
   .manual-row{display:grid;grid-template-columns:1fr 2fr auto auto;gap:8px;align-items:center;padding:8px 10px;background:var(--bg-primary);border:0.5px solid var(--border-light);border-radius:var(--radius-md);}
+  .ai-suggestion{grid-column:1/-1;display:flex;align-items:flex-start;gap:8px;padding:7px 10px;background:var(--bg-secondary);border-radius:6px;font-size:12px;margin-top:-2px;}
+  .ai-suggestion-icon{font-size:14px;color:var(--blue);flex-shrink:0;margin-top:1px;}
+  .ai-suggestion-text{flex:1;color:var(--text-secondary);line-height:1.5;}
+  .ai-suggestion-text strong{color:var(--text-primary);}
+  .ai-suggestion-text .confidence-high{color:var(--green);}
+  .ai-suggestion-text .confidence-med{color:var(--amber);}
+  .ai-suggestion-text .confidence-low{color:var(--text-tertiary);}
+  .btn-accept-suggestion{font-size:11px;padding:3px 9px;border-radius:6px;background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);white-space:nowrap;flex-shrink:0;}
+  .btn-accept-suggestion:hover{background:var(--blue-dark);}
+  .ai-analyzing{grid-column:1/-1;font-size:12px;color:var(--text-tertiary);padding:4px 0;display:flex;align-items:center;gap:6px;}
+  .ai-dot{width:6px;height:6px;border-radius:50%;background:var(--blue);animation:pulse 1.2s ease-in-out infinite;}
+  .ai-dot:nth-child(2){animation-delay:0.2s;}
+  .ai-dot:nth-child(3){animation-delay:0.4s;}
+  @keyframes pulse{0%,80%,100%{opacity:0.2;}40%{opacity:1;}}
   .manual-filename{font-size:12px;color:var(--text-secondary);word-break:break-all;}
   .manual-addr-wrap{position:relative;}
   .manual-addr{width:100%;font-size:13px;padding:5px 8px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);font-family:var(--font);}
@@ -946,6 +960,103 @@ document.getElementById('csv-input').addEventListener('change',function(e){
 });
 
 // Pending panel
+// Claude vision API — analyze photo for location clues
+async function analyzePhotoLocation(thumb, photoId) {
+  const markets = MARKETS.map(m => m.name).join(', ');
+  const systemPrompt = `You are analyzing field service photos to determine their geographic location. 
+The possible markets are: ${markets} (all in the southeastern US / Ohio / Kentucky region).
+Look for ANY visual location indicators: street signs, business signs, landmarks, license plates, 
+regional vegetation, architecture styles, terrain, or any other geographic clues.
+Respond ONLY with valid JSON in this exact format:
+{"confidence":"high|medium|low|none","market":"market name or null","reason":"brief explanation"}
+If you cannot determine the location, use confidence "none" and market null.
+Never guess without evidence. Be honest about uncertainty.`;
+
+  try {
+    // Extract base64 from data URL
+    const base64 = thumb.split(',')[1];
+    const mediaType = thumb.split(';')[0].split(':')[1];
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 200,
+        system: systemPrompt,
+        messages: [{
+          role: 'user',
+          content: [{
+            type: 'image',
+            source: { type: 'base64', media_type: mediaType, data: base64 }
+          }, {
+            type: 'text',
+            text: 'Analyze this photo for geographic location clues. Which market does it belong to?'
+          }]
+        }]
+      })
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    const text = data.content?.[0]?.text || '';
+    // Parse JSON from response
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    return JSON.parse(match[0]);
+  } catch(e) {
+    console.error('AI analysis failed:', e);
+    return null;
+  }
+}
+
+function showAiSuggestion(p, result, row) {
+  // Remove any existing suggestion
+  const existing = row.querySelector('.ai-suggestion,.ai-analyzing');
+  if (existing) existing.remove();
+
+  if (!result || result.confidence === 'none' || !result.market) {
+    const el = document.createElement('div');
+    el.className = 'ai-suggestion';
+    el.innerHTML = `<i class="ti ti-robot ai-suggestion-icon"></i>
+      <div class="ai-suggestion-text"><strong>AI:</strong> Can't determine location from this photo — please enter manually.</div>`;
+    row.appendChild(el);
+    return;
+  }
+
+  const confidenceClass = result.confidence === 'high' ? 'confidence-high' : result.confidence === 'medium' ? 'confidence-med' : 'confidence-low';
+  const el = document.createElement('div');
+  el.className = 'ai-suggestion';
+  el.innerHTML = `<i class="ti ti-robot ai-suggestion-icon"></i>
+    <div class="ai-suggestion-text">
+      <strong>AI suggests:</strong> ${result.market}
+      <span class="${confidenceClass}"> (${result.confidence} confidence)</span><br>
+      <span style="font-size:11px;color:var(--text-tertiary)">${result.reason}</span>
+    </div>
+    <button class="btn-accept-suggestion" onclick="acceptAiSuggestion('${p.id}','${result.market.replace(/'/g,"\'")}')">Accept</button>`;
+  row.appendChild(el);
+}
+
+window.acceptAiSuggestion = async function(id, market) {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Looking up...';
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(market + ', USA')}&countrycodes=us`);
+    const d = await r.json();
+    if (!d.length) { btn.disabled = false; btn.textContent = 'Accept'; toast('Could not geocode suggestion — try typing it manually.'); return; }
+    const coords = { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
+    const brand = document.getElementById(`brand-${id}`)?.value || 'mosquito';
+    // Pre-fill the address input
+    const input = document.getElementById(`addr-${id}`);
+    if (input) input.value = d[0].display_name;
+    // Store coords and enable pin button
+    window[`_coords_${id}`] = () => ({ coords, brand: document.getElementById(`brand-${id}`)?.value || brand });
+    const pinBtn = document.getElementById(`pinbtn-${id}`);
+    if (pinBtn) pinBtn.disabled = false;
+    btn.textContent = 'Accepted ✓'; btn.style.background = 'var(--green)';
+  } catch(e) { btn.disabled = false; btn.textContent = 'Accept'; }
+};
+
 function renderPendingPanel(){
   const panel=document.getElementById('manual-panel'),body=document.getElementById('manual-body'),badge=document.getElementById('manual-badge');
   if(!pending.length){panel.style.display='none';return;}
@@ -967,6 +1078,18 @@ function renderPendingPanel(){
       </select>
       <button class="pin-btn" id="pinbtn-${p.id}" disabled onclick="pinPending('${p.id}')">Pin it</button>`;
     body.appendChild(row);
+
+    // Trigger AI analysis if photo has a thumb
+    if(p.thumb){
+      const analyzing=document.createElement('div');
+      analyzing.className='ai-analyzing';
+      analyzing.innerHTML='<div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div> <span>Analyzing photo for location clues...</span>';
+      row.appendChild(analyzing);
+      analyzePhotoLocation(p.thumb, p.id).then(result=>{
+        showAiSuggestion(p, result, row);
+      });
+    }
+
     const input=document.getElementById(`addr-${p.id}`),sugBox=document.getElementById(`sug-${p.id}`);
     let selectedCoords=null;
     input.addEventListener('input',()=>{
