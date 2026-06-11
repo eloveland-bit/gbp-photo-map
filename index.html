@@ -310,13 +310,13 @@
     <div id="tech-upload-form">
       <h1>Upload Field Photo</h1>
       <p class="tech-subtitle">Add a photo from today's job. Takes about 30 seconds.</p>
-      <div class="tech-drop-zone" id="tech-drop-zone" onclick="document.getElementById('tech-file-input').click()">
+      <label class="tech-drop-zone" id="tech-drop-zone" for="tech-file-input" style="cursor:pointer;display:block;">
         <i class="ti ti-camera"></i>
         <p>Tap to add photos from this job</p>
         <small>Select one or multiple — JPG or PNG</small>
-      </div>
-      <input type="file" id="tech-file-input" accept="image/*" multiple style="display:none">
-      <div id="tech-photo-grid" style="display:none;display:none;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;"></div>
+      </label>
+      <input type="file" id="tech-file-input" accept="image/*,image/heic,image/heif" multiple style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">
+      <div id="tech-photo-grid" style="display:none;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;"></div>
       <div class="tech-field">
         <label>Your name</label>
         <input type="text" id="tech-name" placeholder="e.g. Jake Miller" autocomplete="name">
@@ -607,7 +607,7 @@ async function loadFromDrive(){
     }
     if(!driveDataFileId){
       // No data file in Drive yet — push local data up if we have any
-      if(photos.length>0||pending.length>0){
+      if(photos.length>0||pending.length>0||techReview.length>0){
         await saveToDrive();
         toast('Map data saved to Drive.');
       }
@@ -664,8 +664,11 @@ async function loadFromDrive(){
     techReview = [...driveTechReview, ...localTechReviewOnly];
     photos.forEach(p=>addMarker(p));
 
-    // If we had local-only items, push merged state back to Drive immediately
-    if(localOnly.length > 0 || localPendingOnly.length > 0 || localTechReviewOnly.length > 0){
+    // If we had local-only items OR deletedIds filtered items out, push merged state back to Drive immediately
+    const driveHadDeletedItems = (data.pending||[]).length > filteredDrivePending.length ||
+      (data.photos||[]).length > drivePhotos.length ||
+      (data.techReview||[]).length > driveTechReview.length;
+    if(localOnly.length > 0 || localPendingOnly.length > 0 || localTechReviewOnly.length > 0 || driveHadDeletedItems){
       await saveToDrive();
     }
 
@@ -1939,6 +1942,7 @@ if(isTechMode){
 }
 // Auto sign-in silently on page load so Drive syncs without user action
 window.addEventListener('load',()=>{
+  // Always load Google Identity Services for silent token refresh
   if(window.google&&window.google.accounts){
     tryAutoSignIn();
   }else{
@@ -1948,6 +1952,21 @@ window.addEventListener('load',()=>{
     document.body.appendChild(s);
   }
 });
+
+// Re-authenticate silently every 45 minutes to keep token fresh
+setInterval(()=>{
+  if(!window.google||!window.google.accounts)return;
+  try{
+    const client=google.accounts.oauth2.initTokenClient({
+      client_id:config.clientId,
+      scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+      callback:(resp)=>{
+        if(resp.access_token)oauthToken=resp.access_token;
+      }
+    });
+    client.requestAccessToken({prompt:'none'});
+  }catch(e){}
+}, 45*60*1000);
 function setSyncState(state){
   const btn=document.getElementById('sync-btn');
   const label=document.getElementById('sync-label');
