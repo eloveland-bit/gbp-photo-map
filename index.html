@@ -1579,27 +1579,75 @@ window.saveDesc=function(id){
 
 // Tech upload page logic
 let techSelectedFile=null;
+let techSelectedFiles=[];
 let techSelectedCoords=null;
 let techSuggestTimer=null;
 
+// Tech photo grid render — uses outer techSelectedFiles
+function renderTechPhotoGrid(){
+  const grid=document.getElementById('tech-photo-grid');
+  const dropZone=document.getElementById('tech-drop-zone');
+  const locationInput=document.getElementById('tech-location');
+  if(!grid)return;
+  const grid2=document.getElementById('tech-photo-grid');
+  if(!techSelectedFiles.length){
+    grid.style.display='none';
+    if(dropZone)dropZone.style.display='block';
+    checkTechSubmitReady();
+    return;
+  }
+  if(dropZone)dropZone.style.display='none';
+  grid.style.display='grid';
+  grid.innerHTML='';
+  const countDiv=document.createElement('div');
+  countDiv.style.cssText='grid-column:1/-1;font-size:13px;color:var(--color-text-secondary,#6b6b67);text-align:center;margin-bottom:4px;';
+  countDiv.innerHTML=`${techSelectedFiles.length} photo${techSelectedFiles.length>1?'s':''} selected &nbsp;<label for="tech-file-input" style="font-size:12px;color:#185FA5;cursor:pointer;text-decoration:underline">Add more</label>`;
+  grid.appendChild(countDiv);
+  techSelectedFiles.forEach((file,i)=>{
+    const wrap=document.createElement('div');
+    wrap.className='tech-photo-thumb-wrap';
+    const img=document.createElement('img');
+    img.src=URL.createObjectURL(file);
+    img.alt=file.name;
+    const removeBtn=document.createElement('button');
+    removeBtn.className='tech-photo-remove';
+    removeBtn.innerHTML='<i class="ti ti-x" style="font-size:10px"></i>';
+    removeBtn.onclick=(e)=>{e.stopPropagation();techSelectedFiles.splice(i,1);renderTechPhotoGrid();};
+    wrap.appendChild(img);wrap.appendChild(removeBtn);
+    grid.appendChild(wrap);
+  });
+  if(!techSelectedCoords){
+    extractEXIF(techSelectedFiles[0]).then(coords=>{
+      if(coords){
+        techSelectedCoords=coords;
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`)
+          .then(r=>r.json()).then(d=>{
+            if(d.display_name){
+              const li=document.getElementById('tech-location');
+              if(li)li.value=d.display_name;
+              checkTechSubmitReady();
+            }
+          }).catch(()=>{});
+      }
+    });
+  }
+  checkTechSubmitReady();
+}
+
 function initTechUploadPage(){
   document.getElementById('tech-upload-page').style.display='block';
-  // Hide main app
   document.getElementById('app').style.display='none';
 
-  const fileInput=document.getElementById('tech-file-input');
-  const dropZone=document.getElementById('tech-drop-zone');
-  const submitBtn=document.getElementById('tech-submit-btn');
+  techSelectedFiles=[];
+  techSelectedCoords=null;
+
+  const nameInput=document.getElementById('tech-name');
   const locationInput=document.getElementById('tech-location');
   const sugBox=document.getElementById('tech-suggestions');
-  const nameInput=document.getElementById('tech-name');
-  techSelectedFiles=[];
 
-  // Restore saved name so they don't have to retype it
+  // Restore saved name
   const savedName=localStorage.getItem('gbp_tech_name');
   if(savedName&&nameInput)nameInput.value=savedName;
-
-  // Save name as they type
   if(nameInput){
     nameInput.addEventListener('input',()=>{
       localStorage.setItem('gbp_tech_name',nameInput.value.trim());
@@ -1607,67 +1655,34 @@ function initTechUploadPage(){
     });
   }
 
-  // Multi-photo support
-  let techSelectedFiles=[];
-
-  function renderTechPhotoGrid(){
-    const grid=document.getElementById('tech-photo-grid');
-    if(!grid)return;
-    if(!techSelectedFiles.length){
-      grid.style.display='none';
-      dropZone.style.display='block';
-      checkTechSubmitReady();
-      return;
-    }
-    dropZone.style.display='none';
-    grid.style.display='grid';
-    grid.innerHTML='';
-    // Add photo count
-    const countDiv=document.createElement('div');
-    countDiv.className='tech-photo-count';
-    countDiv.style.cssText='grid-column:1/-1;font-size:13px;color:var(--text-secondary);text-align:center;';
-    countDiv.innerHTML=`${techSelectedFiles.length} photo${techSelectedFiles.length>1?'s':''} selected &nbsp;<span style="font-size:12px;color:var(--blue);cursor:pointer;text-decoration:underline" onclick="document.getElementById('tech-file-input').click()">Add more</span>`;
-    grid.appendChild(countDiv);
-    techSelectedFiles.forEach((file,i)=>{
-      const wrap=document.createElement('div');
-      wrap.className='tech-photo-thumb-wrap';
-      const img=document.createElement('img');
-      img.src=URL.createObjectURL(file);
-      img.alt=file.name;
-      const removeBtn=document.createElement('button');
-      removeBtn.className='tech-photo-remove';
-      removeBtn.innerHTML='<i class="ti ti-x" style="font-size:10px"></i>';
-      removeBtn.onclick=(e)=>{e.stopPropagation();techSelectedFiles.splice(i,1);renderTechPhotoGrid();};
-      wrap.appendChild(img);wrap.appendChild(removeBtn);
-      grid.appendChild(wrap);
+  // File input change — only adds to array, no upload
+  const fileInput=document.getElementById('tech-file-input');
+  if(fileInput){
+    fileInput.addEventListener('change',(e)=>{
+      const newFiles=Array.from(e.target.files).filter(f=>f.type.startsWith('image/')||f.type.startsWith('image/heic')||f.name.toLowerCase().endsWith('.heic')||f.name.toLowerCase().endsWith('.heif'));
+      if(newFiles.length){
+        techSelectedFiles=[...techSelectedFiles,...newFiles];
+        renderTechPhotoGrid();
+      }
+      e.target.value='';
     });
-    // Try auto-geocode from first file with GPS
-    if(!techSelectedCoords){
-      extractEXIF(techSelectedFiles[0]).then(coords=>{
-        if(coords){
-          techSelectedCoords=coords;
-          fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`)
-            .then(r=>r.json()).then(d=>{
-              if(d.display_name){locationInput.value=d.display_name;checkTechSubmitReady();}
-            }).catch(()=>{});
-        }
-      });
-    }
-    checkTechSubmitReady();
   }
 
-  fileInput.addEventListener('change',(e)=>{
-    const newFiles=Array.from(e.target.files).filter(f=>f.type.startsWith('image/'));
-    techSelectedFiles=[...techSelectedFiles,...newFiles];
-    renderTechPhotoGrid();
-    e.target.value='';
+  // Drag and drop onto tech upload page
+  const techPage=document.getElementById('tech-upload-page');
+  techPage.addEventListener('dragover',(e)=>{e.preventDefault();e.stopPropagation();
+    const dz=document.getElementById('tech-drop-zone');
+    if(dz)dz.style.borderColor='#185FA5';
   });
-
-  // Drag onto tech page
-  document.getElementById('tech-upload-page').addEventListener('dragover',(e)=>e.preventDefault());
-  document.getElementById('tech-upload-page').addEventListener('drop',(e)=>{
-    e.preventDefault();
-    const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/'));
+  techPage.addEventListener('dragleave',(e)=>{
+    const dz=document.getElementById('tech-drop-zone');
+    if(dz)dz.style.borderColor='';
+  });
+  techPage.addEventListener('drop',(e)=>{
+    e.preventDefault();e.stopPropagation();
+    const dz=document.getElementById('tech-drop-zone');
+    if(dz)dz.style.borderColor='';
+    const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/')||f.name.toLowerCase().endsWith('.heic')||f.name.toLowerCase().endsWith('.heif'));
     if(files.length){techSelectedFiles=[...techSelectedFiles,...files];renderTechPhotoGrid();}
   });
 
@@ -1779,17 +1794,17 @@ window.submitTechUpload=async function(){
 
 window.resetTechForm=function(){
   techSelectedFiles=[];techSelectedCoords=null;
-  document.getElementById('tech-file-input').value='';
+  const fi=document.getElementById('tech-file-input');if(fi)fi.value='';
   const grid=document.getElementById('tech-photo-grid');
   if(grid){grid.style.display='none';grid.innerHTML='';}
-  document.getElementById('tech-drop-zone').style.display='block';
-  document.getElementById('tech-location').value='';
-  document.getElementById('tech-desc').value='';
-  document.getElementById('tech-brand').value='mosquito';
+  const dz=document.getElementById('tech-drop-zone');if(dz)dz.style.display='block';
+  const loc=document.getElementById('tech-location');if(loc)loc.value='';
+  const desc=document.getElementById('tech-desc');if(desc)desc.value='';
+  const brand=document.getElementById('tech-brand');if(brand)brand.value='mosquito';
   const btn=document.getElementById('tech-submit-btn');
   if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-cloud-upload"></i> Upload Photo';}
-  document.getElementById('tech-upload-form').style.display='block';
-  document.getElementById('tech-success').style.display='none';
+  const form=document.getElementById('tech-upload-form');if(form)form.style.display='block';
+  const succ=document.getElementById('tech-success');if(succ)succ.style.display='none';
 };
 
 // Latest upload banner
