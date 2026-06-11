@@ -466,6 +466,7 @@ let photos=[],pending=[],markers={};
 let activeBrand='all',showUsed=false,panelOpen=true;
 let pickerApiLoaded=false,oauthToken=null,driveFolderId=null,driveDataFileId=null,saveTimer=null;
 let techReview=[];
+let deletedIds=new Set();
 let suggestTimers={};
 let config={clientId:'788046954081-1ojin1jscuit4vujd76qcinm3hjsgiq4.apps.googleusercontent.com',domain:'eloveland-bit.github.io'};
 const isTechMode=new URLSearchParams(window.location.search).has('upload');
@@ -510,7 +511,8 @@ function getStateData(){
   return {
     photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null})),
     pending: pending.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,driveId:p.driveId||null})),
-    techReview: techReview.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null,coords:p.coords||null,submittedBy:p.submittedBy||null,submittedAt:p.submittedAt||null}))
+    techReview: techReview.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null,coords:p.coords||null,submittedBy:p.submittedBy||null,submittedAt:p.submittedAt||null})),
+    deletedIds: Array.from(deletedIds)
   };
 }
 
@@ -621,7 +623,7 @@ async function loadFromDrive(){
     // MERGE — never overwrite, always combine
     // Drive is the base. Any local photo not in Drive gets added. 
     // For photos in both, Drive version of 'used' wins (marketer's decisions are authoritative).
-    const drivePhotos = data.photos || [];
+    const drivePhotos = (data.photos||[]).filter(p=>!deletedIds.has(p.id)&&!deletedIds.has(p.driveId));
     const drivePending = data.pending || [];
     const driveIds = new Set(drivePhotos.map(p=>p.id));
     const driveDriveFileIds = new Set(drivePhotos.map(p=>p.driveId).filter(Boolean));
@@ -636,19 +638,25 @@ async function loadFromDrive(){
       !allPinnedIds.has(p.id) &&
       !allPinnedDriveIds.has(p.driveId)
     );
-    // Also filter Drive pending to exclude anything now pinned OR in techReview
+    // Also filter Drive pending to exclude anything now pinned, in techReview, or explicitly deleted
     const allTechReviewIds = new Set(techReview.map(p=>p.id));
     const allTechReviewDriveIds = new Set(techReview.map(p=>p.driveId).filter(Boolean));
     const filteredDrivePending = drivePending.filter(p =>
       !allPinnedIds.has(p.id) &&
       !allPinnedDriveIds.has(p.driveId) &&
       !allTechReviewIds.has(p.id) &&
-      !allTechReviewDriveIds.has(p.driveId)
+      !allTechReviewDriveIds.has(p.driveId) &&
+      !deletedIds.has(p.id) &&
+      !deletedIds.has(p.driveId)
     );
 
+    // Load deletedIds from Drive and merge with local
+    const driveDeletedIds = new Set(data.deletedIds||[]);
+    driveDeletedIds.forEach(id=>deletedIds.add(id));
+
     // Rebuild from merged set
-    const driveTechReview = data.techReview || [];
-    const localTechReviewOnly = techReview.filter(p => !driveTechReview.find(dp=>dp.id===p.id));
+    const driveTechReview = (data.techReview||[]).filter(p=>!deletedIds.has(p.id)&&!deletedIds.has(p.driveId));
+    const localTechReviewOnly = techReview.filter(p => !driveTechReview.find(dp=>dp.id===p.id)&&!deletedIds.has(p.id)&&!deletedIds.has(p.driveId));
     Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
     photos = [...drivePhotos, ...localOnly];
@@ -903,7 +911,10 @@ window.removePhoto=async function(id){
   const p=photos[idx];
   if(!confirm('Remove this photo? It will also be deleted from Google Drive.'))return;
   const key=locKey(p);
-  // Delete from Drive
+  // Track as deleted so sync never restores it
+  deletedIds.add(p.id);
+  if(p.driveId)deletedIds.add(p.driveId);
+  // Delete file from Drive
   if(p.driveId&&oauthToken){
     try{
       await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}`,{
@@ -914,8 +925,11 @@ window.removePhoto=async function(id){
   delete markers[id];
   photos.splice(idx,1);
   rebuildLocMarker(key);
+  // Save to localStorage immediately
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(photos.map(ph=>({id:ph.id,name:ph.name,lat:ph.lat,lng:ph.lng,brand:ph.brand,used:ph.used,thumb:ph.thumb,hash:ph.hash||null,desc:ph.desc||null,manual:ph.manual||false,driveId:ph.driveId||null}))));}catch(e){}
   save();
-  if(oauthToken)saveToDrive();
+  // Await Drive save so sync can't overwrite before it completes
+  if(oauthToken)await saveToDrive();
   updateStats();map.closePopup();
   toast('Photo removed from map and Drive.');
 };
@@ -1506,7 +1520,10 @@ window.deletePending=async function(id){
   const idx=pending.findIndex(x=>x.id===id);if(idx===-1)return;
   const p=pending[idx];
   if(!confirm('Remove this photo? It will be deleted from Drive too.'))return;
-  // Delete from Drive
+  // Track as deleted so sync never restores it
+  deletedIds.add(p.id);
+  if(p.driveId)deletedIds.add(p.driveId);
+  // Delete file from Drive
   if(p.driveId&&oauthToken){
     try{
       await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}`,{
@@ -1515,8 +1532,11 @@ window.deletePending=async function(id){
     }catch(e){console.error('Drive delete failed:',e);}
   }
   pending.splice(idx,1);
+  // Save to localStorage immediately
+  try{localStorage.setItem(PENDING_KEY,JSON.stringify(pending));}catch(e){}
   save();
-  if(oauthToken)saveToDrive();
+  // Await Drive save so sync can't overwrite before it completes
+  if(oauthToken)await saveToDrive();
   renderPendingPanel();updateStats();
   toast('Photo removed.');
 };
