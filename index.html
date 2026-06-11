@@ -67,7 +67,7 @@
   #manual-badge{background:var(--red);color:#fff;font-size:11px;font-weight:500;padding:1px 7px;border-radius:10px;}
   #manual-collapse-btn{background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:14px;}
   #manual-body{padding:0 14px 12px;display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;}
-  .manual-row{display:grid;grid-template-columns:52px 1fr 2fr auto auto;gap:8px;align-items:center;padding:8px 10px;background:var(--bg-primary);border:0.5px solid var(--border-light);border-radius:var(--radius-md);}
+  .manual-row{display:grid;grid-template-columns:52px 1fr 2fr auto auto auto;gap:8px;align-items:center;padding:8px 10px;background:var(--bg-primary);border:0.5px solid var(--border-light);border-radius:var(--radius-md);}
   .manual-thumb{width:52px;height:52px;object-fit:cover;border-radius:6px;display:block;cursor:zoom-in;flex-shrink:0;}
   .manual-thumb-placeholder{width:52px;height:52px;border-radius:6px;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:18px;flex-shrink:0;}
   .ai-suggestion{grid-column:1/-1;display:flex;align-items:flex-start;gap:8px;padding:7px 10px;background:var(--bg-secondary);border-radius:6px;font-size:12px;margin-top:-2px;}
@@ -636,9 +636,14 @@ async function loadFromDrive(){
       !allPinnedIds.has(p.id) &&
       !allPinnedDriveIds.has(p.driveId)
     );
-    // Also filter Drive pending to exclude anything now pinned
+    // Also filter Drive pending to exclude anything now pinned OR in techReview
+    const allTechReviewIds = new Set(techReview.map(p=>p.id));
+    const allTechReviewDriveIds = new Set(techReview.map(p=>p.driveId).filter(Boolean));
     const filteredDrivePending = drivePending.filter(p =>
-      !allPinnedIds.has(p.id) && !allPinnedDriveIds.has(p.driveId)
+      !allPinnedIds.has(p.id) &&
+      !allPinnedDriveIds.has(p.driveId) &&
+      !allTechReviewIds.has(p.id) &&
+      !allTechReviewDriveIds.has(p.driveId)
     );
 
     // Rebuild from merged set
@@ -893,13 +898,26 @@ window.undoUsed=function(id){
   const p=photos.find(x=>x.id===id);if(!p)return;
   const key=locKey(p);p.used=false;save();rebuildLocMarker(key);updateStats();map.closePopup();
 };
-window.removePhoto=function(id){
+window.removePhoto=async function(id){
   const idx=photos.findIndex(x=>x.id===id);if(idx===-1)return;
-  const key=locKey(photos[idx]);
+  const p=photos[idx];
+  if(!confirm('Remove this photo? It will also be deleted from Google Drive.'))return;
+  const key=locKey(p);
+  // Delete from Drive
+  if(p.driveId&&oauthToken){
+    try{
+      await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}`,{
+        method:'DELETE',headers:{Authorization:`Bearer ${oauthToken}`}
+      });
+    }catch(e){console.error('Drive delete failed:',e);}
+  }
   delete markers[id];
   photos.splice(idx,1);
   rebuildLocMarker(key);
-  save();updateStats();map.closePopup();
+  save();
+  if(oauthToken)saveToDrive();
+  updateStats();map.closePopup();
+  toast('Photo removed from map and Drive.');
 };
 
 // Auth — shared between upload and picker
@@ -1188,18 +1206,22 @@ async function processUploadFiles(files){
 }
 
 document.getElementById('file-input').addEventListener('change',(e)=>{
+  if(isTechMode){e.target.value='';return;}
   processUploadFiles(Array.from(e.target.files));e.target.value='';
 });
 
 // Drag and drop onto page
 document.addEventListener('dragover',(e)=>{
+  if(isTechMode)return;
   e.preventDefault();
   document.getElementById('drop-zone-overlay').style.display='flex';
 });
 document.addEventListener('dragleave',(e)=>{
+  if(isTechMode)return;
   if(!e.relatedTarget)document.getElementById('drop-zone-overlay').style.display='none';
 });
 document.addEventListener('drop',(e)=>{
+  if(isTechMode)return;
   e.preventDefault();
   document.getElementById('drop-zone-overlay').style.display='none';
   const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/'));
@@ -1422,7 +1444,8 @@ function renderPendingPanel(){
         <option value="lawn" ${p.brand==='lawn'?'selected':''}>Lawn Squad</option>
         <option value="newage" ${p.brand==='newage'?'selected':''}>New Age Lights</option>
       </select>
-      <button class="pin-btn" id="pinbtn-${p.id}" disabled onclick="pinPending('${p.id}')">Pin it</button>`;
+      <button class="pin-btn" id="pinbtn-${p.id}" disabled onclick="pinPending('${p.id}')">Pin it</button>
+      <button class="pin-btn" style="background:var(--red);padding:5px 8px;" onclick="deletePending('${p.id}')" title="Delete from Drive and remove"><i class="ti ti-trash" style="font-size:13px"></i></button>`;
     body.appendChild(row);
 
     // Trigger AI analysis if photo has a thumb
@@ -1478,6 +1501,25 @@ function pinPendingWith(id,coords,brand){
   renderPendingPanel();updateStats();
 }
 window.pinPending=function(id){const g=window[`_coords_${id}`];if(!g)return;const{coords,brand}=g();if(!coords)return;pinPendingWith(id,coords,brand);};
+
+window.deletePending=async function(id){
+  const idx=pending.findIndex(x=>x.id===id);if(idx===-1)return;
+  const p=pending[idx];
+  if(!confirm('Remove this photo? It will be deleted from Drive too.'))return;
+  // Delete from Drive
+  if(p.driveId&&oauthToken){
+    try{
+      await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}`,{
+        method:'DELETE',headers:{Authorization:`Bearer ${oauthToken}`}
+      });
+    }catch(e){console.error('Drive delete failed:',e);}
+  }
+  pending.splice(idx,1);
+  save();
+  if(oauthToken)saveToDrive();
+  renderPendingPanel();updateStats();
+  toast('Photo removed.');
+};
 
 document.getElementById('manual-header').addEventListener('click',()=>{
   panelOpen=!panelOpen;
