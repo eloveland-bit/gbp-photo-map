@@ -114,6 +114,64 @@
   .photo-card-divider{border-top:0.5px solid rgba(0,0,0,0.1);margin:10px 0;}
   .popup-img{width:100%;height:130px;object-fit:cover;border-radius:6px;display:block;margin-bottom:8px;cursor:zoom-in;}
   .popup-name{font-size:12px;font-weight:500;color:#1a1a18;word-break:break-all;margin-bottom:5px;}
+  .popup-desc{font-size:12px;color:#6b6b67;margin-bottom:6px;line-height:1.5;font-style:italic;}
+  .popup-desc-empty{font-size:11px;color:#9b9b97;margin-bottom:6px;cursor:pointer;text-decoration:underline;display:inline-block;}
+  .popup-desc-edit{width:100%;font-size:12px;padding:5px 7px;border-radius:6px;border:0.5px solid rgba(0,0,0,0.2);font-family:var(--font);resize:none;margin-bottom:5px;background:#fff;color:#1a1a18;}
+  .popup-desc-save{font-size:11px;padding:3px 10px;border-radius:6px;background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);}
+  .popup-desc-save:hover{background:var(--blue-dark);}
+  /* Tech upload page */
+  #tech-upload-page{display:none;position:fixed;inset:0;background:var(--bg-primary);z-index:100;overflow-y:auto;}
+  .tech-upload-wrap{max-width:480px;margin:0 auto;padding:24px 20px 40px;}
+  .tech-upload-wrap h1{font-size:20px;font-weight:500;margin-bottom:4px;}
+  .tech-upload-wrap .tech-subtitle{font-size:14px;color:var(--text-secondary);margin-bottom:24px;}
+  .tech-field{margin-bottom:16px;}
+  .tech-field label{font-size:13px;font-weight:500;color:var(--text-primary);display:block;margin-bottom:6px;}
+  .tech-field input,.tech-field select,.tech-field textarea{width:100%;font-size:14px;padding:10px 12px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);font-family:var(--font);}
+  .tech-field input:focus,.tech-field select:focus,.tech-field textarea:focus{outline:none;border-color:var(--blue);}
+  .tech-field textarea{resize:none;height:80px;}
+  .tech-photo-preview{width:100%;height:200px;object-fit:cover;border-radius:var(--radius-md);display:none;margin-bottom:16px;}
+  .tech-drop-zone{width:100%;padding:32px;border:1.5px dashed var(--border-mid);border-radius:var(--radius-md);text-align:center;cursor:pointer;margin-bottom:16px;transition:background 0.15s;}
+  .tech-drop-zone:hover{background:var(--bg-secondary);}
+  .tech-drop-zone i{font-size:32px;color:var(--text-tertiary);display:block;margin-bottom:8px;}
+  .tech-drop-zone p{font-size:14px;color:var(--text-secondary);}
+  .tech-drop-zone small{font-size:12px;color:var(--text-tertiary);}
+  .tech-addr-wrap{position:relative;}
+  .tech-suggestions{position:absolute;top:100%;left:0;right:0;z-index:2000;background:var(--bg-primary);border:0.5px solid var(--border-mid);border-radius:var(--radius-md);margin-top:2px;box-shadow:0 4px 16px rgba(0,0,0,0.12);max-height:180px;overflow-y:auto;}
+  .tech-suggestion-item{padding:10px 12px;font-size:13px;color:var(--text-primary);cursor:pointer;border-bottom:0.5px solid var(--border-light);}
+  .tech-suggestion-item:last-child{border-bottom:none;}
+  .tech-suggestion-item:hover{background:var(--bg-secondary);}
+  .btn-tech-upload{width:100%;padding:14px;font-size:15px;font-weight:500;border-radius:var(--radius-md);background:var(--green);color:#fff;border:none;cursor:pointer;font-family:var(--font);margin-top:8px;}
+  .btn-tech-upload:hover{background:#2d5509;}
+  .btn-tech-upload:disabled{background:var(--bg-tertiary);color:var(--text-tertiary);cursor:default;}
+  .tech-success{text-align:center;padding:40px 20px;display:none;}
+  .tech-success i{font-size:52px;color:var(--green);margin-bottom:16px;}
+  .tech-success h2{font-size:20px;font-weight:500;margin-bottom:8px;}
+  .tech-success p{font-size:14px;color:var(--text-secondary);margin-bottom:24px;}
+  .btn-tech-another{font-size:14px;padding:10px 24px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);}
+  .tech-progress{font-size:13px;color:var(--text-secondary);text-align:center;margin-top:12px;display:none;}
+  /* Review panel */
+  #review-panel{position:fixed;top:0;right:-400px;width:380px;height:100vh;background:var(--bg-primary);border-left:0.5px solid var(--border-mid);z-index:1000;transition:right 0.3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.1);}
+  #review-panel.open{right:0;}
+  #review-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:0.5px solid var(--border-light);flex-shrink:0;}
+  #review-header h3{font-size:15px;font-weight:500;}
+  #review-close{background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:18px;padding:4px;}
+  #review-body{flex:1;overflow-y:auto;padding:16px;}
+  #review-empty{text-align:center;padding:48px 20px;color:var(--text-secondary);}
+  #review-empty i{font-size:40px;color:var(--text-tertiary);display:block;margin-bottom:12px;}
+  .review-card{background:var(--bg-secondary);border-radius:var(--radius-md);overflow:hidden;margin-bottom:16px;border:0.5px solid var(--border-light);}
+  .review-card img{width:100%;height:200px;object-fit:cover;display:block;cursor:zoom-in;}
+  .review-card-body{padding:12px;}
+  .review-card-name{font-size:12px;color:var(--text-tertiary);margin-bottom:6px;word-break:break-all;}
+  .review-card-brand{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;color:#fff;font-weight:500;margin-bottom:6px;}
+  .review-card-location{font-size:13px;color:var(--text-primary);margin-bottom:4px;}
+  .review-card-desc{font-size:12px;color:var(--text-secondary);font-style:italic;margin-bottom:10px;}
+  .review-card-gps{font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);margin-bottom:10px;}
+  .review-card-actions{display:flex;gap:8px;}
+  .btn-review-accept{flex:1;padding:8px;border-radius:var(--radius-md);background:var(--green);color:#fff;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:var(--font);}
+  .btn-review-accept:hover{background:#2d5509;}
+  .btn-review-deny{flex:1;padding:8px;border-radius:var(--radius-md);background:var(--bg-primary);color:var(--red);border:0.5px solid var(--red);cursor:pointer;font-size:13px;font-weight:500;font-family:var(--font);}
+  .btn-review-deny:hover{background:#fff0f0;}
+  #review-badge{display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;margin-left:4px;}
   .popup-badges{margin-bottom:6px;}
   .popup-brand-badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;color:#fff;font-weight:500;}
   .popup-source-tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;margin-left:4px;background:#eeede9;color:#6b6b67;border:0.5px solid rgba(0,0,0,0.12);}
@@ -132,6 +190,18 @@
   .toast.fade{opacity:0;}
   #lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:5000;align-items:center;justify-content:center;cursor:zoom-out;}
   #lightbox img{max-width:92vw;max-height:92vh;border-radius:var(--radius-md);object-fit:contain;}
+  #dup-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:7000;align-items:center;justify-content:center;}
+  #dup-modal{background:var(--bg-primary);border-radius:var(--radius-lg);border:0.5px solid var(--border-mid);padding:24px;width:420px;max-width:92vw;}
+  #dup-modal h3{font-size:15px;font-weight:500;margin-bottom:8px;}
+  #dup-modal p{font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.6;}
+  .dup-thumbs{display:flex;gap:12px;margin-bottom:18px;}
+  .dup-thumb-wrap{flex:1;text-align:center;}
+  .dup-thumb-wrap img{width:100%;height:100px;object-fit:cover;border-radius:6px;display:block;}
+  .dup-thumb-wrap span{font-size:11px;color:var(--text-tertiary);display:block;margin-top:4px;}
+  .dup-actions{display:flex;gap:8px;justify-content:flex-end;}
+  .btn-dup-skip{font-size:13px;padding:7px 16px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;font-family:var(--font);}
+  .btn-dup-upload{font-size:13px;padding:7px 16px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);}
+  .btn-dup-upload:hover{background:var(--blue-dark);}
   #access-banner{display:none;position:fixed;inset:0;background:var(--bg-primary);z-index:6000;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;}
   #access-screen-request,#access-screen-sent{display:flex;flex-direction:column;align-items:center;max-width:340px;width:100%;}
   #access-banner i{font-size:48px;color:var(--text-tertiary);margin-bottom:16px;}
@@ -176,12 +246,15 @@
     <div class="toolbar-right">
       <button class="toggle-used marketer-only" id="toggle-used-btn">Show used</button>
       <span id="stats" class="marketer-only">0 unused · 0 used</span>
+      <button class="icon-btn marketer-only" id="review-btn" onclick="toggleReviewPanel()" style="position:relative">
+        <i class="ti ti-inbox"></i> Review
+        <span id="review-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;">0</span>
+      </button>
       <button class="icon-btn marketer-only" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
       <label class="icon-btn marketer-only" style="cursor:pointer">
         <i class="ti ti-file-import"></i> Import CSV
         <input type="file" id="csv-input" accept=".csv" style="display:none">
       </label>
-
     </div>
   </div>
 
@@ -212,6 +285,66 @@
   </div>
 </div>
 
+<!-- Tech upload page (shown when ?upload in URL) -->
+<div id="tech-upload-page">
+  <div class="tech-upload-wrap">
+    <div id="tech-upload-form">
+      <h1>Upload Field Photo</h1>
+      <p class="tech-subtitle">Add a photo from today's job. Takes about 30 seconds.</p>
+      <img id="tech-photo-preview" class="tech-photo-preview" alt="Preview">
+      <div class="tech-drop-zone" id="tech-drop-zone" onclick="document.getElementById('tech-file-input').click()">
+        <i class="ti ti-camera"></i>
+        <p>Tap to take a photo or choose from your camera roll</p>
+        <small>JPG or PNG</small>
+      </div>
+      <input type="file" id="tech-file-input" accept="image/*" capture="environment" style="display:none">
+      <div class="tech-field">
+        <label>Brand</label>
+        <select id="tech-brand">
+          <option value="mosquito">Mosquito Squad</option>
+          <option value="lawn">Lawn Squad</option>
+          <option value="newage">New Age Lights</option>
+        </select>
+      </div>
+      <div class="tech-field">
+        <label>Location <span style="color:var(--text-tertiary);font-weight:400">(street, neighborhood, or city)</span></label>
+        <div class="tech-addr-wrap">
+          <input type="text" id="tech-location" placeholder="e.g. 123 Oak St, Hixson TN" autocomplete="off">
+          <div class="tech-suggestions" id="tech-suggestions" style="display:none"></div>
+        </div>
+      </div>
+      <div class="tech-field">
+        <label>Description <span style="color:var(--text-tertiary);font-weight:400">(optional — what's in the photo?)</span></label>
+        <textarea id="tech-desc" placeholder="e.g. Backyard treatment, fence line, before application"></textarea>
+      </div>
+      <button class="btn-tech-upload" id="tech-submit-btn" disabled onclick="submitTechUpload()">
+        <i class="ti ti-cloud-upload"></i> Upload Photo
+      </button>
+      <p class="tech-progress" id="tech-progress"></p>
+    </div>
+    <div class="tech-success" id="tech-success">
+      <i class="ti ti-circle-check"></i>
+      <h2>Photo uploaded!</h2>
+      <p>It's been added to the map and saved to Drive. Nice work.</p>
+      <button class="btn-tech-another" onclick="resetTechForm()">Upload another photo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Review panel -->
+<div id="review-panel">
+  <div id="review-header">
+    <h3>Pending Review <span id="review-count" style="color:var(--text-tertiary);font-weight:400;font-size:13px"></span></h3>
+    <button id="review-close" onclick="toggleReviewPanel()"><i class="ti ti-x"></i></button>
+  </div>
+  <div id="review-body">
+    <div id="review-empty">
+      <i class="ti ti-check"></i>
+      All caught up — no photos waiting for review.
+    </div>
+  </div>
+</div>
+
 <div id="config-overlay" onclick="if(event.target===this)hideConfig()">
   <div id="config-modal">
     <h2>Google Drive setup</h2>
@@ -237,6 +370,27 @@
 
 <div id="lightbox" onclick="closeLightbox()">
   <img id="lightbox-img" src="" alt="Full size preview">
+</div>
+
+<div id="dup-overlay">
+  <div id="dup-modal">
+    <h3>Possible duplicate photo</h3>
+    <p id="dup-msg">This photo looks identical to one already on the map. Are you sure you want to upload it again?</p>
+    <div class="dup-thumbs">
+      <div class="dup-thumb-wrap">
+        <img id="dup-existing-thumb" src="" alt="Existing">
+        <span>Already on map</span>
+      </div>
+      <div class="dup-thumb-wrap">
+        <img id="dup-new-thumb" src="" alt="New">
+        <span>New upload</span>
+      </div>
+    </div>
+    <div class="dup-actions">
+      <button class="btn-dup-skip" id="dup-skip-btn">Skip — don't upload</button>
+      <button class="btn-dup-upload" id="dup-upload-btn">Upload anyway</button>
+    </div>
+  </div>
 </div>
 
 <div id="access-banner">
@@ -277,6 +431,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'�
 let photos=[],pending=[],markers={};
 let activeBrand='all',showUsed=false,panelOpen=true;
 let pickerApiLoaded=false,oauthToken=null,driveFolderId=null,driveDataFileId=null,saveTimer=null;
+let techReview=[];
 let suggestTimers={};
 let config={clientId:'788046954081-1ojin1jscuit4vujd76qcinm3hjsgiq4.apps.googleusercontent.com',domain:'eloveland-bit.github.io'};
 const isTechMode=new URLSearchParams(window.location.search).has('upload');
@@ -319,8 +474,9 @@ function hideLoading(){document.getElementById('loading-overlay').style.display=
 // Serialize current state
 function getStateData(){
   return {
-    photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,manual:p.manual||false,driveId:p.driveId||null})),
-    pending: pending.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,driveId:p.driveId||null}))
+    photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null})),
+    pending: pending.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,driveId:p.driveId||null})),
+    techReview: techReview.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null,coords:p.coords||null}))
   };
 }
 
@@ -331,6 +487,7 @@ function save(){
     const d=getStateData();
     localStorage.setItem(STORAGE_KEY,JSON.stringify(d.photos));
     localStorage.setItem(PENDING_KEY,JSON.stringify(d.pending));
+    localStorage.setItem('gbp_tech_review',JSON.stringify(d.techReview));
   }catch(e){}
   // Debounce Drive save
   clearTimeout(saveTimer);
@@ -393,8 +550,10 @@ async function load(){
   try{
     const r=localStorage.getItem(STORAGE_KEY);
     const rp=localStorage.getItem(PENDING_KEY);
+    const rr=localStorage.getItem('gbp_tech_review');
     if(r){photos=JSON.parse(r);photos.forEach(p=>addMarker(p));}
     if(rp){pending=JSON.parse(rp);renderPendingPanel();}
+    if(rr){techReview=JSON.parse(rr);}
   }catch(e){}
   updateStats();checkNoPhotos();
   // Then load from Drive once signed in (called after auth)
@@ -438,14 +597,17 @@ async function loadFromDrive(){
     const localPendingOnly = pending.filter(p => !drivePending.find(dp=>dp.id===p.id));
 
     // Rebuild from merged set
+    const driveTechReview = data.techReview || [];
+    const localTechReviewOnly = techReview.filter(p => !driveTechReview.find(dp=>dp.id===p.id));
     Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
     photos = [...drivePhotos, ...localOnly];
     pending = [...drivePending, ...localPendingOnly];
+    techReview = [...driveTechReview, ...localTechReviewOnly];
     photos.forEach(p=>addMarker(p));
 
     // If we had local-only items, push merged state back to Drive immediately
-    if(localOnly.length > 0 || localPendingOnly.length > 0){
+    if(localOnly.length > 0 || localPendingOnly.length > 0 || localTechReviewOnly.length > 0){
       await saveToDrive();
     }
 
@@ -453,8 +615,9 @@ async function loadFromDrive(){
     try{
       localStorage.setItem(STORAGE_KEY,JSON.stringify(photos));
       localStorage.setItem(PENDING_KEY,JSON.stringify(pending));
+      localStorage.setItem('gbp_tech_review',JSON.stringify(techReview));
     }catch(e){}
-    renderPendingPanel();updateStats();checkNoPhotos();
+    renderPendingPanel();updateStats();checkNoPhotos();updateReviewBadge();
     if(photos.length>0){
       const bounds=L.latLngBounds(photos.map(p=>[p.lat,p.lng]));
       map.fitBounds(bounds,{padding:[60,60]});
@@ -497,6 +660,16 @@ function buildPhotoCard(p){
   html+=`<div class="popup-badges"><span class="popup-brand-badge" style="background:${color}">${label}</span>`;
   if(p.manual)html+=`<span class="popup-source-tag">manual pin</span>`;
   html+=`</div>`;
+  // Description
+  if(p.desc){
+    html+=`<div class="popup-desc">${p.desc} <span style="font-size:10px;color:#9b9b97;cursor:pointer;text-decoration:underline" onclick="editDesc('${p.id}')">edit</span></div>`;
+  }else if(!isTechMode){
+    html+=`<span class="popup-desc-empty" onclick="editDesc('${p.id}')">+ Add description</span>`;
+  }
+  html+=`<div id="desc-edit-${p.id}" style="display:none">
+    <textarea class="popup-desc-edit" id="desc-input-${p.id}" rows="2" placeholder="What's in this photo?">${p.desc||''}</textarea>
+    <button class="popup-desc-save" onclick="saveDesc('${p.id}')">Save</button>
+  </div>`;
   if(!isTechMode){
     if(!p.used){
       html+=`<div class="popup-actions"><button class="btn-used" onclick="markUsed('${p.id}')">Mark used</button><button class="btn-remove" onclick="removePhoto('${p.id}')">Remove</button></div>`;
@@ -781,6 +954,74 @@ function triggerUpload(){
   document.getElementById('file-input').click();
 }
 
+// Perceptual hash — generates a 64-bit fingerprint from image pixel data
+// Two copies of the same photo will produce identical or near-identical hashes
+async function perceptualHash(file){
+  return new Promise((resolve)=>{
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      const img=new Image();
+      img.onload=()=>{
+        // Shrink to 8x8 grayscale — captures structure, ignores minor edits
+        const canvas=document.createElement('canvas');
+        canvas.width=8;canvas.height=8;
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,8,8);
+        const pixels=ctx.getImageData(0,0,8,8).data;
+        // Convert to grayscale values
+        const gray=[];
+        for(let i=0;i<64;i++){
+          const r=pixels[i*4],g=pixels[i*4+1],b=pixels[i*4+2];
+          gray.push(0.299*r+0.587*g+0.114*b);
+        }
+        // Average and build binary hash
+        const avg=gray.reduce((a,b)=>a+b,0)/64;
+        const hash=gray.map(v=>v>=avg?'1':'0').join('');
+        resolve(hash);
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function hashDistance(h1,h2){
+  if(!h1||!h2||h1.length!==h2.length)return 64;
+  let diff=0;
+  for(let i=0;i<h1.length;i++)if(h1[i]!==h2[i])diff++;
+  return diff;
+}
+
+function findDuplicate(hash){
+  // Distance of 5 or less out of 64 bits = same photo
+  for(const p of photos){
+    if(p.hash&&hashDistance(p.hash,hash)<=5)return p;
+  }
+  for(const p of pending){
+    if(p.hash&&hashDistance(p.hash,hash)<=5)return p;
+  }
+  return null;
+}
+
+// Show duplicate confirmation modal — returns promise resolving to true (upload) or false (skip)
+function confirmDuplicate(existingPhoto, newThumb){
+  return new Promise((resolve)=>{
+    const existing=photos.find(p=>p.id===existingPhoto.id)||pending.find(p=>p.id===existingPhoto.id);
+    document.getElementById('dup-existing-thumb').src=existing?.thumb||'';
+    document.getElementById('dup-new-thumb').src=newThumb;
+    document.getElementById('dup-overlay').style.display='flex';
+    const skipBtn=document.getElementById('dup-skip-btn');
+    const uploadBtn=document.getElementById('dup-upload-btn');
+    const cleanup=()=>{
+      document.getElementById('dup-overlay').style.display='none';
+      skipBtn.replaceWith(skipBtn.cloneNode(true));
+      uploadBtn.replaceWith(uploadBtn.cloneNode(true));
+    };
+    document.getElementById('dup-skip-btn').onclick=()=>{cleanup();resolve(false);};
+    document.getElementById('dup-upload-btn').onclick=()=>{cleanup();resolve(true);};
+  });
+}
+
 // Market definitions — bounding boxes for each market
 const MARKETS = [
   { name: 'Chattanooga', bounds: { minLat: 34.85, maxLat: 35.25, minLng: -85.55, maxLng: -85.05 } },
@@ -841,10 +1082,17 @@ async function processUploadFiles(files){
     for(let i=0;i<files.length;i++){
       const file=files[i];
       if(!file.type.startsWith('image/'))continue;
-      if(photos.find(p=>p.name===file.name)||pending.find(p=>p.name===file.name))continue;
       updateLoadingProgress(`${i+1} of ${files.length} — ${file.name}`);
       try{
-        const [thumb,coords]=await Promise.all([getThumb(file),extractEXIF(file)]);
+        const [thumb,coords,hash]=await Promise.all([getThumb(file),extractEXIF(file),perceptualHash(file)]);
+        // Check for duplicate by content fingerprint (ignores filename)
+        const dupMatch=findDuplicate(hash);
+        if(dupMatch){
+          hideLoading();
+          const proceed=await confirmDuplicate(dupMatch,thumb);
+          showLoading(`Uploading to Drive...`,`${i+1} of ${files.length}`);
+          if(!proceed)continue;
+        }
         const brand=guessBrand(file.name);
         const id=Date.now()+Math.random().toString(36).slice(2);
         // Determine target folder — subfolder if GPS known, root folder otherwise
@@ -854,15 +1102,15 @@ async function processUploadFiles(files){
           market=detectMarket(coords.lat,coords.lng);
           if(market){
             try{targetFolderId=await getOrCreateSubFolder(brand,market);}
-            catch(e){targetFolderId=folderId;} // fall back to root if subfolder fails
+            catch(e){targetFolderId=folderId;}
           }
         }
         const driveFile=await uploadFileToDrive(file,targetFolderId);
         if(coords){
-          const p={id,name:file.name,lat:coords.lat,lng:coords.lng,brand,used:false,thumb,driveId:driveFile.id,manual:false,market:market||'Unknown'};
+          const p={id,name:file.name,lat:coords.lat,lng:coords.lng,brand,used:false,thumb,hash,driveId:driveFile.id,manual:false,market:market||'Unknown'};
           photos.push(p);addMarker(p);refreshMarker(p);added++;
         }else{
-          pending.push({id,name:file.name,brand,thumb,driveId:driveFile.id});
+          pending.push({id,name:file.name,brand,thumb,hash,driveId:driveFile.id});
           noGps++;
         }
       }catch(e){console.error('Failed:',file.name,e);failed++;}
@@ -1177,7 +1425,294 @@ document.getElementById('toggle-used-btn').addEventListener('click',function(){
 });
 document.addEventListener('keydown',(e)=>{if(e.key==='Escape')closeLightbox();});
 
+// Description editing
+window.editDesc=function(id){
+  const wrap=document.getElementById(`desc-edit-${id}`);
+  if(wrap)wrap.style.display=wrap.style.display==='none'?'block':'none';
+};
+window.saveDesc=function(id){
+  const p=photos.find(x=>x.id===id);if(!p)return;
+  const input=document.getElementById(`desc-input-${id}`);
+  if(!input)return;
+  p.desc=input.value.trim();
+  save();
+  map.closePopup();
+  toast('Description saved.');
+};
+
+// Tech upload page logic
+let techSelectedFile=null;
+let techSelectedCoords=null;
+let techSuggestTimer=null;
+
+function initTechUploadPage(){
+  document.getElementById('tech-upload-page').style.display='block';
+  // Hide main app
+  document.getElementById('app').style.display='none';
+
+  const fileInput=document.getElementById('tech-file-input');
+  const preview=document.getElementById('tech-photo-preview');
+  const dropZone=document.getElementById('tech-drop-zone');
+  const submitBtn=document.getElementById('tech-submit-btn');
+  const locationInput=document.getElementById('tech-location');
+  const sugBox=document.getElementById('tech-suggestions');
+
+  fileInput.addEventListener('change',(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    techSelectedFile=file;
+    const url=URL.createObjectURL(file);
+    preview.src=url;
+    preview.style.display='block';
+    dropZone.style.display='none';
+    checkTechSubmitReady();
+    // Auto-extract GPS
+    extractEXIF(file).then(coords=>{
+      if(coords){
+        techSelectedCoords=coords;
+        // Reverse geocode to show address
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`)
+          .then(r=>r.json()).then(d=>{
+            if(d.display_name){
+              locationInput.value=d.display_name;
+              checkTechSubmitReady();
+            }
+          }).catch(()=>{});
+      }
+    });
+  });
+
+  // Drag onto tech page
+  document.getElementById('tech-upload-page').addEventListener('dragover',(e)=>e.preventDefault());
+  document.getElementById('tech-upload-page').addEventListener('drop',(e)=>{
+    e.preventDefault();
+    const file=Array.from(e.dataTransfer.files).find(f=>f.type.startsWith('image/'));
+    if(file){fileInput.files=e.dataTransfer.files;fileInput.dispatchEvent(new Event('change'));}
+  });
+
+  locationInput.addEventListener('input',()=>{
+    techSelectedCoords=null;
+    clearTimeout(techSuggestTimer);
+    const q=locationInput.value.trim();
+    if(q.length<3){sugBox.style.display='none';checkTechSubmitReady();return;}
+    techSuggestTimer=setTimeout(async()=>{
+      try{
+        const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}&countrycodes=us`);
+        const d=await r.json();
+        if(!d.length){sugBox.style.display='none';return;}
+        sugBox.innerHTML='';
+        d.forEach(item=>{
+          const div=document.createElement('div');div.className='tech-suggestion-item';div.textContent=item.display_name;
+          div.addEventListener('click',()=>{
+            locationInput.value=item.display_name;
+            techSelectedCoords={lat:parseFloat(item.lat),lng:parseFloat(item.lon)};
+            sugBox.style.display='none';
+            checkTechSubmitReady();
+          });
+          sugBox.appendChild(div);
+        });
+        sugBox.style.display='block';
+      }catch(e){sugBox.style.display='none';}
+    },400);
+  });
+  document.addEventListener('click',(e)=>{
+    if(!document.getElementById('tech-addr-wrap')?.contains(e.target))sugBox.style.display='none';
+  });
+}
+
+function checkTechSubmitReady(){
+  const hasFile=!!techSelectedFile;
+  const hasLocation=document.getElementById('tech-location')?.value.trim().length>2||techSelectedCoords;
+  document.getElementById('tech-submit-btn').disabled=!(hasFile&&hasLocation);
+}
+
+window.submitTechUpload=async function(){
+  if(!techSelectedFile)return;
+  const btn=document.getElementById('tech-submit-btn');
+  const progress=document.getElementById('tech-progress');
+  btn.disabled=true;progress.style.display='block';
+  progress.textContent='Signing in to Drive...';
+
+  ensureAuth(async()=>{
+    try{
+      progress.textContent='Checking for duplicates...';
+      const [thumb,hash]=await Promise.all([getThumb(techSelectedFile),perceptualHash(techSelectedFile)]);
+      const dupMatch=findDuplicate(hash);
+      if(dupMatch){
+        const proceed=await confirmDuplicate(dupMatch,thumb);
+        if(!proceed){btn.disabled=false;progress.style.display='none';return;}
+      }
+
+      progress.textContent='Uploading to Drive...';
+      const brand=document.getElementById('tech-brand').value;
+      const desc=document.getElementById('tech-desc').value.trim();
+      const locationText=document.getElementById('tech-location').value.trim();
+      const coords=techSelectedCoords;
+      const folderId=await getOrCreateFolder();
+      let targetFolderId=folderId;
+      let market=null;
+      if(coords){
+        market=detectMarket(coords.lat,coords.lng);
+        if(market){
+          try{targetFolderId=await getOrCreateSubFolder(brand,market);}
+          catch(e){targetFolderId=folderId;}
+        }
+      }
+      const driveFile=await uploadFileToDrive(techSelectedFile,targetFolderId);
+      const id=Date.now()+Math.random().toString(36).slice(2);
+      // Add to techReview queue instead of directly to map
+      const reviewItem={
+        id,
+        name:techSelectedFile.name,
+        brand,
+        thumb,
+        hash,
+        desc:desc||null,
+        driveId:driveFile.id,
+        locationHint:locationText,
+        coords:coords||null,
+        market:market||null,
+        submittedAt:new Date().toISOString()
+      };
+      techReview.push(reviewItem);
+      save();
+      updateReviewBadge();
+      progress.style.display='none';
+      document.getElementById('tech-upload-form').style.display='none';
+      document.getElementById('tech-success').style.display='block';
+    }catch(e){
+      console.error(e);
+      progress.textContent='Upload failed — check your connection and try again.';
+      btn.disabled=false;
+    }
+  });
+};
+
+window.resetTechForm=function(){
+  techSelectedFile=null;techSelectedCoords=null;
+  document.getElementById('tech-file-input').value='';
+  document.getElementById('tech-photo-preview').style.display='none';
+  document.getElementById('tech-drop-zone').style.display='block';
+  document.getElementById('tech-location').value='';
+  document.getElementById('tech-desc').value='';
+  document.getElementById('tech-brand').value='mosquito';
+  document.getElementById('tech-submit-btn').disabled=true;
+  document.getElementById('tech-upload-form').style.display='block';
+  document.getElementById('tech-success').style.display='none';
+};
+
+// Review panel
+function updateReviewBadge(){
+  const badge=document.getElementById('review-badge');
+  const btn=document.getElementById('review-btn');
+  if(!badge||!btn)return;
+  const count=techReview.length;
+  badge.textContent=count;
+  badge.style.display=count>0?'flex':'none';
+}
+
+function toggleReviewPanel(){
+  const panel=document.getElementById('review-panel');
+  if(!panel)return;
+  const isOpen=panel.classList.contains('open');
+  if(isOpen){panel.classList.remove('open');}
+  else{panel.classList.add('open');renderReviewPanel();}
+}
+
+function renderReviewPanel(){
+  const body=document.getElementById('review-body');
+  const countEl=document.getElementById('review-count');
+  if(!body)return;
+  if(!techReview.length){
+    body.innerHTML=`<div id="review-empty"><i class="ti ti-check"></i>All caught up — no photos waiting for review.</div>`;
+    if(countEl)countEl.textContent='';
+    return;
+  }
+  if(countEl)countEl.textContent=`(${techReview.length})`;
+  body.innerHTML='';
+  techReview.forEach(p=>{
+    const color=brandColors[p.brand]||'#444';
+    const label=brandLabels[p.brand]||p.brand;
+    const gpsText=p.coords?`${parseFloat(p.coords.lat).toFixed(5)}, ${parseFloat(p.coords.lng).toFixed(5)}`:'No GPS — will need manual placement';
+    const card=document.createElement('div');
+    card.className='review-card';
+    card.id=`review-card-${p.id}`;
+    card.innerHTML=`
+      ${p.thumb?`<img src="${p.thumb}" alt="${p.name}" onclick="openLightboxUrl('${p.thumb}')">` : ''}
+      <div class="review-card-body">
+        <div class="review-card-name">${p.name}</div>
+        <span class="review-card-brand" style="background:${color}">${label}</span>
+        ${p.locationHint?`<div class="review-card-location"><i class="ti ti-map-pin" style="font-size:12px"></i> ${p.locationHint}</div>`:''}
+        ${p.desc?`<div class="review-card-desc">"${p.desc}"</div>`:''}
+        <div class="review-card-gps">${gpsText}</div>
+        <div class="review-card-actions">
+          <button class="btn-review-accept" onclick="acceptReview('${p.id}')"><i class="ti ti-check"></i> Accept</button>
+          <button class="btn-review-deny" onclick="denyReview('${p.id}')"><i class="ti ti-x"></i> Deny</button>
+        </div>
+      </div>`;
+    body.appendChild(card);
+  });
+}
+
+window.openLightboxUrl=function(src){
+  document.getElementById('lightbox-img').src=src;
+  document.getElementById('lightbox').style.display='flex';
+};
+
+window.acceptReview=async function(id){
+  const idx=techReview.findIndex(p=>p.id===id);if(idx===-1)return;
+  const p=techReview[idx];
+  const btn=document.querySelector(`#review-card-${id} .btn-review-accept`);
+  if(btn){btn.disabled=true;btn.textContent='Accepting...';}
+  if(p.coords){
+    // Has GPS — pin directly
+    const photo={id:p.id,name:p.name,lat:p.coords.lat,lng:p.coords.lng,brand:p.brand,used:false,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,manual:false,market:p.market||'Unknown'};
+    photos.push(photo);addMarker(photo);refreshMarker(photo);
+  }else{
+    // No GPS — add to pending tray for manual placement
+    pending.push({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null});
+    renderPendingPanel();
+  }
+  techReview.splice(idx,1);
+  save();updateStats();updateReviewBadge();
+  // Animate card out
+  const card=document.getElementById(`review-card-${id}`);
+  if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>{card.remove();if(!techReview.length)renderReviewPanel();},300);}
+  const countEl=document.getElementById('review-count');
+  if(countEl&&techReview.length)countEl.textContent=`(${techReview.length})`;
+  toast(`Photo accepted — ${p.coords?'pinned to map':'added to placement queue'}.`);
+};
+
+window.denyReview=async function(id){
+  const idx=techReview.findIndex(p=>p.id===id);if(idx===-1)return;
+  const p=techReview[idx];
+  const btn=document.querySelector(`#review-card-${id} .btn-review-deny`);
+  if(btn){btn.disabled=true;btn.textContent='Deleting...';}
+  // Delete from Drive
+  if(p.driveId&&oauthToken){
+    try{
+      await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}`,{
+        method:'DELETE',headers:{Authorization:`Bearer ${oauthToken}`}
+      });
+    }catch(e){console.error('Drive delete failed:',e);}
+  }
+  techReview.splice(idx,1);
+  save();updateReviewBadge();
+  const card=document.getElementById(`review-card-${id}`);
+  if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>{card.remove();if(!techReview.length)renderReviewPanel();},300);}
+  const countEl=document.getElementById('review-count');
+  if(countEl&&techReview.length)countEl.textContent=`(${techReview.length})`;
+  toast('Photo denied and deleted from Drive.');
+};
+
 loadConfig();load();loadPickerApi();
+// Update review badge on load
+setTimeout(updateReviewBadge,100);
+// Show tech upload page if ?upload in URL
+if(isTechMode){
+  ensureAuth(()=>{});// pre-auth silently
+  initTechUploadPage();
+}
 // Auto sign-in silently on page load so Drive syncs without user action
 window.addEventListener('load',()=>{
   if(window.google&&window.google.accounts){
