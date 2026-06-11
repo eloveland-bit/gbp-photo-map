@@ -921,7 +921,10 @@ function ensureAuth(callback){
         oauthToken=resp.access_token;
         hideAccessBanner();
         // Sync from Drive on every sign-in so all devices stay current
-        loadFromDrive().then(()=>callback());
+        loadFromDrive().then(()=>{
+          callback();
+          startAutoSync();
+        });
       }
     });
     client.requestAccessToken({prompt:''});
@@ -1906,6 +1909,7 @@ function manualSync(){
   ensureAuth(async()=>{
     await loadFromDrive();
     setSyncState('synced');
+    startAutoSync();
   });
 }
 
@@ -1916,20 +1920,49 @@ function tryAutoSignIn(){
       scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
       callback:(resp)=>{
         if(resp.error||!resp.access_token){
-          // Silent sign-in failed — show access banner so user can request or sign in manually
           if(resp.error&&resp.error!=='suppressed_by_user')showAccessBanner();
           return;
         }
         oauthToken=resp.access_token;
         hideAccessBanner();
         setSyncState('syncing');
-        loadFromDrive().then(()=>setSyncState('synced'));
+        loadFromDrive().then(()=>{
+          setSyncState('synced');
+          // Start auto-sync loop once signed in
+          startAutoSync();
+        });
       }
     });
-    // Use prompt:'none' to try silently — works on desktop, fails gracefully on mobile
     client.requestAccessToken({prompt:'none'});
   }catch(e){}
 }
+
+// Auto-sync every 2 minutes while signed in
+let autoSyncInterval=null;
+function startAutoSync(){
+  if(autoSyncInterval)return; // already running
+  autoSyncInterval=setInterval(async()=>{
+    if(!oauthToken)return;
+    // Silent background sync — no spinner, no toast unless new items arrive
+    try{
+      const prevReviewCount=techReview.length;
+      const prevPhotoCount=photos.length;
+      await loadFromDrive();
+      // Show banner if new photos arrived in review queue
+      if(techReview.length>prevReviewCount){
+        const newest=[...techReview].sort((a,b)=>new Date(b.submittedAt||0)-new Date(a.submittedAt||0))[0];
+        if(newest)showLatestBanner(newest);
+      }
+      // Refresh map if new approved photos arrived
+      if(photos.length>prevPhotoCount){
+        const bounds=L.latLngBounds(photos.map(p=>[p.lat,p.lng]));
+        if(photos.length>prevPhotoCount)toast(`${photos.length-prevPhotoCount} new photo${photos.length-prevPhotoCount>1?'s':''} added to map.`);
+      }
+    }catch(e){}
+  }, 2*60*1000); // 2 minutes
+}
+
+
 </script>
 </body>
 </html>
