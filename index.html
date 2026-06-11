@@ -132,6 +132,11 @@
   .tech-field input:focus,.tech-field select:focus,.tech-field textarea:focus{outline:none;border-color:var(--blue);}
   .tech-field textarea{resize:none;height:80px;}
   .tech-photo-preview{width:100%;height:200px;object-fit:cover;border-radius:var(--radius-md);display:none;margin-bottom:16px;}
+  .tech-photo-grid{display:none;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+  .tech-photo-thumb-wrap{position:relative;aspect-ratio:1;border-radius:var(--radius-md);overflow:hidden;}
+  .tech-photo-thumb-wrap img{width:100%;height:100%;object-fit:cover;display:block;}
+  .tech-photo-remove{position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;line-height:1;}
+  .tech-photo-count{font-size:13px;color:var(--text-secondary);margin-bottom:12px;text-align:center;}
   .tech-drop-zone{width:100%;padding:32px;border:1.5px dashed var(--border-mid);border-radius:var(--radius-md);text-align:center;cursor:pointer;margin-bottom:16px;transition:background 0.15s;}
   .tech-drop-zone:hover{background:var(--bg-secondary);}
   .tech-drop-zone i{font-size:32px;color:var(--text-tertiary);display:block;margin-bottom:8px;}
@@ -305,13 +310,13 @@
     <div id="tech-upload-form">
       <h1>Upload Field Photo</h1>
       <p class="tech-subtitle">Add a photo from today's job. Takes about 30 seconds.</p>
-      <img id="tech-photo-preview" class="tech-photo-preview" alt="Preview">
       <div class="tech-drop-zone" id="tech-drop-zone" onclick="document.getElementById('tech-file-input').click()">
         <i class="ti ti-camera"></i>
-        <p>Tap to take a photo or choose from your camera roll</p>
-        <small>JPG or PNG</small>
+        <p>Tap to add photos from this job</p>
+        <small>Select one or multiple — JPG or PNG</small>
       </div>
-      <input type="file" id="tech-file-input" accept="image/*" capture="environment" style="display:none">
+      <input type="file" id="tech-file-input" accept="image/*" multiple style="display:none">
+      <div id="tech-photo-grid" style="display:none;display:none;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;"></div>
       <div class="tech-field">
         <label>Your name</label>
         <input type="text" id="tech-name" placeholder="e.g. Jake Miller" autocomplete="name">
@@ -1140,7 +1145,13 @@ async function processUploadFiles(files){
           }
         }
         const driveFile=await uploadFileToDrive(file,targetFolderId);
-        if(coords){
+        if(isTechMode){
+          // Tech page uploads always go to review queue
+          const reviewItem={id,name:file.name,brand,thumb,hash,desc:null,
+            driveId:driveFile.id,locationHint:null,coords:coords||null,
+            market:market||null,submittedBy:'Tech',submittedAt:new Date().toISOString()};
+          techReview.push(reviewItem);added++;
+        }else if(coords){
           const p={id,name:file.name,lat:coords.lat,lng:coords.lng,brand,used:false,thumb,hash,driveId:driveFile.id,manual:false,market:market||'Unknown'};
           photos.push(p);addMarker(p);refreshMarker(p);added++;
         }else{
@@ -1442,7 +1453,10 @@ function pinPendingWith(id,coords,brand){
   const photo={id:p.id,name:p.name,lat:coords.lat,lng:coords.lng,brand,used:false,thumb:p.thumb,driveId:p.driveId||null,manual:true};
   photos.push(photo);pending.splice(pIdx,1);
   addMarker(photo);map.setView([coords.lat,coords.lng],14);
-  save();renderPendingPanel();updateStats();
+  save();
+  // Force immediate Drive save so pin survives a sync
+  if(oauthToken)saveToDrive();
+  renderPendingPanel();updateStats();
 }
 window.pinPending=function(id){const g=window[`_coords_${id}`];if(!g)return;const{coords,brand}=g();if(!coords)return;pinPendingWith(id,coords,brand);};
 
@@ -1474,6 +1488,7 @@ window.saveDesc=function(id){
   if(!input)return;
   p.desc=input.value.trim();
   save();
+  if(oauthToken)saveToDrive();
   map.closePopup();
   toast('Description saved.');
 };
@@ -1489,12 +1504,12 @@ function initTechUploadPage(){
   document.getElementById('app').style.display='none';
 
   const fileInput=document.getElementById('tech-file-input');
-  const preview=document.getElementById('tech-photo-preview');
   const dropZone=document.getElementById('tech-drop-zone');
   const submitBtn=document.getElementById('tech-submit-btn');
   const locationInput=document.getElementById('tech-location');
   const sugBox=document.getElementById('tech-suggestions');
   const nameInput=document.getElementById('tech-name');
+  techSelectedFiles=[];
 
   // Restore saved name so they don't have to retype it
   const savedName=localStorage.getItem('gbp_tech_name');
@@ -1508,37 +1523,68 @@ function initTechUploadPage(){
     });
   }
 
-  fileInput.addEventListener('change',(e)=>{
-    const file=e.target.files[0];
-    if(!file)return;
-    techSelectedFile=file;
-    const url=URL.createObjectURL(file);
-    preview.src=url;
-    preview.style.display='block';
+  // Multi-photo support
+  let techSelectedFiles=[];
+
+  function renderTechPhotoGrid(){
+    const grid=document.getElementById('tech-photo-grid');
+    if(!grid)return;
+    if(!techSelectedFiles.length){
+      grid.style.display='none';
+      dropZone.style.display='block';
+      checkTechSubmitReady();
+      return;
+    }
     dropZone.style.display='none';
-    checkTechSubmitReady();
-    // Auto-extract GPS
-    extractEXIF(file).then(coords=>{
-      if(coords){
-        techSelectedCoords=coords;
-        // Reverse geocode to show address
-        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`)
-          .then(r=>r.json()).then(d=>{
-            if(d.display_name){
-              locationInput.value=d.display_name;
-              checkTechSubmitReady();
-            }
-          }).catch(()=>{});
-      }
+    grid.style.display='grid';
+    grid.innerHTML='';
+    // Add photo count
+    const countDiv=document.createElement('div');
+    countDiv.className='tech-photo-count';
+    countDiv.style.cssText='grid-column:1/-1;font-size:13px;color:var(--text-secondary);text-align:center;';
+    countDiv.innerHTML=`${techSelectedFiles.length} photo${techSelectedFiles.length>1?'s':''} selected &nbsp;<span style="font-size:12px;color:var(--blue);cursor:pointer;text-decoration:underline" onclick="document.getElementById('tech-file-input').click()">Add more</span>`;
+    grid.appendChild(countDiv);
+    techSelectedFiles.forEach((file,i)=>{
+      const wrap=document.createElement('div');
+      wrap.className='tech-photo-thumb-wrap';
+      const img=document.createElement('img');
+      img.src=URL.createObjectURL(file);
+      img.alt=file.name;
+      const removeBtn=document.createElement('button');
+      removeBtn.className='tech-photo-remove';
+      removeBtn.innerHTML='<i class="ti ti-x" style="font-size:10px"></i>';
+      removeBtn.onclick=(e)=>{e.stopPropagation();techSelectedFiles.splice(i,1);renderTechPhotoGrid();};
+      wrap.appendChild(img);wrap.appendChild(removeBtn);
+      grid.appendChild(wrap);
     });
+    // Try auto-geocode from first file with GPS
+    if(!techSelectedCoords){
+      extractEXIF(techSelectedFiles[0]).then(coords=>{
+        if(coords){
+          techSelectedCoords=coords;
+          fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`)
+            .then(r=>r.json()).then(d=>{
+              if(d.display_name){locationInput.value=d.display_name;checkTechSubmitReady();}
+            }).catch(()=>{});
+        }
+      });
+    }
+    checkTechSubmitReady();
+  }
+
+  fileInput.addEventListener('change',(e)=>{
+    const newFiles=Array.from(e.target.files).filter(f=>f.type.startsWith('image/'));
+    techSelectedFiles=[...techSelectedFiles,...newFiles];
+    renderTechPhotoGrid();
+    e.target.value='';
   });
 
   // Drag onto tech page
   document.getElementById('tech-upload-page').addEventListener('dragover',(e)=>e.preventDefault());
   document.getElementById('tech-upload-page').addEventListener('drop',(e)=>{
     e.preventDefault();
-    const file=Array.from(e.dataTransfer.files).find(f=>f.type.startsWith('image/'));
-    if(file){fileInput.files=e.dataTransfer.files;fileInput.dispatchEvent(new Event('change'));}
+    const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/'));
+    if(files.length){techSelectedFiles=[...techSelectedFiles,...files];renderTechPhotoGrid();}
   });
 
   locationInput.addEventListener('input',()=>{
@@ -1572,69 +1618,73 @@ function initTechUploadPage(){
 }
 
 function checkTechSubmitReady(){
-  const hasFile=!!techSelectedFile;
+  const hasFiles=techSelectedFiles&&techSelectedFiles.length>0;
   const hasLocation=document.getElementById('tech-location')?.value.trim().length>2||techSelectedCoords;
   const hasName=document.getElementById('tech-name')?.value.trim().length>1;
-  document.getElementById('tech-submit-btn').disabled=!(hasFile&&hasLocation&&hasName);
+  const btn=document.getElementById('tech-submit-btn');
+  if(btn){
+    btn.disabled=!(hasFiles&&hasLocation&&hasName);
+    const count=techSelectedFiles?.length||0;
+    btn.innerHTML=`<i class="ti ti-cloud-upload"></i> Upload ${count>1?count+' Photos':'Photo'}`;
+  }
 }
 
 window.submitTechUpload=async function(){
-  if(!techSelectedFile)return;
+  if(!techSelectedFiles||!techSelectedFiles.length)return;
   const btn=document.getElementById('tech-submit-btn');
   const progress=document.getElementById('tech-progress');
   btn.disabled=true;progress.style.display='block';
-  progress.textContent='Signing in to Drive...';
+  const brand=document.getElementById('tech-brand').value;
+  const desc=document.getElementById('tech-desc').value.trim();
+  const locationText=document.getElementById('tech-location').value.trim();
+  const techName=document.getElementById('tech-name')?.value.trim()||'Unknown';
+  const total=techSelectedFiles.length;
 
   ensureAuth(async()=>{
     try{
-      progress.textContent='Checking for duplicates...';
-      const [thumb,hash]=await Promise.all([getThumb(techSelectedFile),perceptualHash(techSelectedFile)]);
-      const dupMatch=findDuplicate(hash);
-      if(dupMatch){
-        const proceed=await confirmDuplicate(dupMatch,thumb);
-        if(!proceed){btn.disabled=false;progress.style.display='none';return;}
-      }
-
-      progress.textContent='Uploading to Drive...';
-      const brand=document.getElementById('tech-brand').value;
-      const desc=document.getElementById('tech-desc').value.trim();
-      const locationText=document.getElementById('tech-location').value.trim();
-      const coords=techSelectedCoords;
       const folderId=await getOrCreateFolder();
-      let targetFolderId=folderId;
-      let market=null;
-      if(coords){
-        market=detectMarket(coords.lat,coords.lng);
-        if(market){
-          try{targetFolderId=await getOrCreateSubFolder(brand,market);}
-          catch(e){targetFolderId=folderId;}
+      let addedCount=0;
+      for(let i=0;i<techSelectedFiles.length;i++){
+        const file=techSelectedFiles[i];
+        progress.textContent=`Uploading photo ${i+1} of ${total}...`;
+        const [thumb,hash,coords]=await Promise.all([getThumb(file),perceptualHash(file),extractEXIF(file)]);
+        const dupMatch=findDuplicate(hash);
+        if(dupMatch){
+          const proceed=await confirmDuplicate(dupMatch,thumb);
+          if(!proceed)continue;
         }
+        const fileCoords=coords||techSelectedCoords||null;
+        let targetFolderId=folderId;
+        let market=null;
+        if(fileCoords){
+          market=detectMarket(fileCoords.lat,fileCoords.lng);
+          if(market){try{targetFolderId=await getOrCreateSubFolder(brand,market);}catch(e){targetFolderId=folderId;}}
+        }
+        const driveFile=await uploadFileToDrive(file,targetFolderId);
+        const id=Date.now()+Math.random().toString(36).slice(2);
+        const reviewItem={
+          id,name:file.name,brand,thumb,hash,
+          desc:desc||null,driveId:driveFile.id,
+          locationHint:locationText,
+          coords:fileCoords||null,
+          market:market||null,
+          submittedBy:techName,
+          submittedAt:new Date().toISOString()
+        };
+        techReview.push(reviewItem);
+        addedCount++;
       }
-      const driveFile=await uploadFileToDrive(techSelectedFile,targetFolderId);
-      const id=Date.now()+Math.random().toString(36).slice(2);
-      // Add to techReview queue instead of directly to map
-      const techName=document.getElementById('tech-name')?.value.trim()||'Unknown';
-      const reviewItem={
-        id,
-        name:techSelectedFile.name,
-        brand,
-        thumb,
-        hash,
-        desc:desc||null,
-        driveId:driveFile.id,
-        locationHint:locationText,
-        coords:coords||null,
-        market:market||null,
-        submittedBy:techName,
-        submittedAt:new Date().toISOString()
-      };
-      techReview.push(reviewItem);
-      save();
-      updateReviewBadge();
-      if(!isTechMode)showLatestBanner(reviewItem);
+      save();updateReviewBadge();
+      if(techReview.length>0){
+        const newest=[...techReview].sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt))[0];
+        if(!isTechMode)showLatestBanner(newest);
+      }
       progress.style.display='none';
       document.getElementById('tech-upload-form').style.display='none';
-      document.getElementById('tech-success').style.display='block';
+      const successEl=document.getElementById('tech-success');
+      successEl.style.display='block';
+      successEl.querySelector('p').textContent=
+        `${addedCount} photo${addedCount!==1?'s':''} uploaded and sent for review. Nice work.`;
     }catch(e){
       console.error(e);
       progress.textContent='Upload failed — check your connection and try again.';
@@ -1644,15 +1694,16 @@ window.submitTechUpload=async function(){
 };
 
 window.resetTechForm=function(){
-  techSelectedFile=null;techSelectedCoords=null;
+  techSelectedFiles=[];techSelectedCoords=null;
   document.getElementById('tech-file-input').value='';
-  document.getElementById('tech-photo-preview').style.display='none';
+  const grid=document.getElementById('tech-photo-grid');
+  if(grid){grid.style.display='none';grid.innerHTML='';}
   document.getElementById('tech-drop-zone').style.display='block';
   document.getElementById('tech-location').value='';
   document.getElementById('tech-desc').value='';
   document.getElementById('tech-brand').value='mosquito';
-  // Keep name filled in — tech shouldn't have to retype it
-  document.getElementById('tech-submit-btn').disabled=true;
+  const btn=document.getElementById('tech-submit-btn');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-cloud-upload"></i> Upload Photo';}
   document.getElementById('tech-upload-form').style.display='block';
   document.getElementById('tech-success').style.display='none';
 };
@@ -1764,7 +1815,9 @@ window.acceptReview=async function(id){
     renderPendingPanel();
   }
   techReview.splice(idx,1);
-  save();updateStats();updateReviewBadge();
+  save();
+  if(oauthToken)saveToDrive();
+  updateStats();updateReviewBadge();
   // Animate card out
   const card=document.getElementById(`review-card-${id}`);
   if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>{card.remove();if(!techReview.length)renderReviewPanel();},300);}
