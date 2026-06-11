@@ -628,7 +628,18 @@ async function loadFromDrive(){
 
     // Local photos not in Drive (added since last sync) — keep them
     const localOnly = photos.filter(p => !driveIds.has(p.id) && !driveDriveFileIds.has(p.driveId));
-    const localPendingOnly = pending.filter(p => !drivePending.find(dp=>dp.id===p.id));
+    // Don't restore pending items that have already been pinned (exist in photos or localOnly)
+    const allPinnedIds = new Set([...drivePhotos,...localOnly].map(p=>p.id));
+    const allPinnedDriveIds = new Set([...drivePhotos,...localOnly].map(p=>p.driveId).filter(Boolean));
+    const localPendingOnly = pending.filter(p =>
+      !drivePending.find(dp=>dp.id===p.id) &&
+      !allPinnedIds.has(p.id) &&
+      !allPinnedDriveIds.has(p.driveId)
+    );
+    // Also filter Drive pending to exclude anything now pinned
+    const filteredDrivePending = drivePending.filter(p =>
+      !allPinnedIds.has(p.id) && !allPinnedDriveIds.has(p.driveId)
+    );
 
     // Rebuild from merged set
     const driveTechReview = data.techReview || [];
@@ -636,7 +647,7 @@ async function loadFromDrive(){
     Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
     photos = [...drivePhotos, ...localOnly];
-    pending = [...drivePending, ...localPendingOnly];
+    pending = [...filteredDrivePending, ...localPendingOnly];
     techReview = [...driveTechReview, ...localTechReviewOnly];
     photos.forEach(p=>addMarker(p));
 
@@ -1453,6 +1464,11 @@ function pinPendingWith(id,coords,brand){
   const photo={id:p.id,name:p.name,lat:coords.lat,lng:coords.lng,brand,used:false,thumb:p.thumb,driveId:p.driveId||null,manual:true};
   photos.push(photo);pending.splice(pIdx,1);
   addMarker(photo);map.setView([coords.lat,coords.lng],14);
+  // Update localStorage immediately so sync can't restore the old pending list
+  try{
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null}))));
+    localStorage.setItem(PENDING_KEY,JSON.stringify(pending));
+  }catch(e){}
   save();
   // Force immediate Drive save so pin survives a sync
   if(oauthToken)saveToDrive();
