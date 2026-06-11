@@ -299,6 +299,10 @@
       </div>
       <input type="file" id="tech-file-input" accept="image/*" capture="environment" style="display:none">
       <div class="tech-field">
+        <label>Your name</label>
+        <input type="text" id="tech-name" placeholder="e.g. Jake Miller" autocomplete="name">
+      </div>
+      <div class="tech-field">
         <label>Brand</label>
         <select id="tech-brand">
           <option value="mosquito">Mosquito Squad</option>
@@ -476,7 +480,7 @@ function getStateData(){
   return {
     photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null})),
     pending: pending.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,driveId:p.driveId||null})),
-    techReview: techReview.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null,coords:p.coords||null}))
+    techReview: techReview.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null,coords:p.coords||null,submittedBy:p.submittedBy||null,submittedAt:p.submittedAt||null}))
   };
 }
 
@@ -1456,6 +1460,19 @@ function initTechUploadPage(){
   const submitBtn=document.getElementById('tech-submit-btn');
   const locationInput=document.getElementById('tech-location');
   const sugBox=document.getElementById('tech-suggestions');
+  const nameInput=document.getElementById('tech-name');
+
+  // Restore saved name so they don't have to retype it
+  const savedName=localStorage.getItem('gbp_tech_name');
+  if(savedName&&nameInput)nameInput.value=savedName;
+
+  // Save name as they type
+  if(nameInput){
+    nameInput.addEventListener('input',()=>{
+      localStorage.setItem('gbp_tech_name',nameInput.value.trim());
+      checkTechSubmitReady();
+    });
+  }
 
   fileInput.addEventListener('change',(e)=>{
     const file=e.target.files[0];
@@ -1523,7 +1540,8 @@ function initTechUploadPage(){
 function checkTechSubmitReady(){
   const hasFile=!!techSelectedFile;
   const hasLocation=document.getElementById('tech-location')?.value.trim().length>2||techSelectedCoords;
-  document.getElementById('tech-submit-btn').disabled=!(hasFile&&hasLocation);
+  const hasName=document.getElementById('tech-name')?.value.trim().length>1;
+  document.getElementById('tech-submit-btn').disabled=!(hasFile&&hasLocation&&hasName);
 }
 
 window.submitTechUpload=async function(){
@@ -1561,6 +1579,7 @@ window.submitTechUpload=async function(){
       const driveFile=await uploadFileToDrive(techSelectedFile,targetFolderId);
       const id=Date.now()+Math.random().toString(36).slice(2);
       // Add to techReview queue instead of directly to map
+      const techName=document.getElementById('tech-name')?.value.trim()||'Unknown';
       const reviewItem={
         id,
         name:techSelectedFile.name,
@@ -1572,6 +1591,7 @@ window.submitTechUpload=async function(){
         locationHint:locationText,
         coords:coords||null,
         market:market||null,
+        submittedBy:techName,
         submittedAt:new Date().toISOString()
       };
       techReview.push(reviewItem);
@@ -1596,6 +1616,7 @@ window.resetTechForm=function(){
   document.getElementById('tech-location').value='';
   document.getElementById('tech-desc').value='';
   document.getElementById('tech-brand').value='mosquito';
+  // Keep name filled in — tech shouldn't have to retype it
   document.getElementById('tech-submit-btn').disabled=true;
   document.getElementById('tech-upload-form').style.display='block';
   document.getElementById('tech-success').style.display='none';
@@ -1645,6 +1666,10 @@ function renderReviewPanel(){
         ${p.locationHint?`<div class="review-card-location"><i class="ti ti-map-pin" style="font-size:12px"></i> ${p.locationHint}</div>`:''}
         ${p.desc?`<div class="review-card-desc">"${p.desc}"</div>`:''}
         <div class="review-card-gps">${gpsText}</div>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px;display:flex;gap:10px;">
+          ${p.submittedBy?`<span><i class="ti ti-user" style="font-size:11px"></i> ${p.submittedBy}</span>`:''}
+          ${p.submittedAt?`<span><i class="ti ti-calendar" style="font-size:11px"></i> ${new Date(p.submittedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}</span>`:''}
+        </div>
         <div class="review-card-actions">
           <button class="btn-review-accept" onclick="acceptReview('${p.id}')"><i class="ti ti-check"></i> Accept</button>
           <button class="btn-review-deny" onclick="denyReview('${p.id}')"><i class="ti ti-x"></i> Deny</button>
