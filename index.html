@@ -149,6 +149,18 @@
   .tech-success p{font-size:14px;color:var(--text-secondary);margin-bottom:24px;}
   .btn-tech-another{font-size:14px;padding:10px 24px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);}
   .tech-progress{font-size:13px;color:var(--text-secondary);text-align:center;margin-top:12px;display:none;}
+  /* Latest upload banner */
+  #latest-banner{display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--bg-primary);border:0.5px solid var(--border-mid);border-radius:var(--radius-lg);
+    box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:10px 14px;z-index:2000;
+    display:none;align-items:center;gap:12px;max-width:380px;width:calc(100% - 40px);}
+  #latest-banner img{width:52px;height:52px;object-fit:cover;border-radius:6px;flex-shrink:0;}
+  #latest-banner-body{flex:1;min-width:0;}
+  #latest-banner-label{font-size:10px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;}
+  #latest-banner-name{font-size:13px;font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #latest-banner-meta{font-size:11px;color:var(--text-secondary);margin-top:1px;}
+  #latest-banner-close{background:none;border:none;cursor:pointer;color:var(--text-tertiary);font-size:16px;padding:4px;flex-shrink:0;}
+  #latest-banner-close:hover{color:var(--text-primary);}
   /* Review panel */
   #review-panel{position:fixed;top:0;right:-400px;width:380px;height:100vh;background:var(--bg-primary);border-left:0.5px solid var(--border-mid);z-index:1000;transition:right 0.3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.1);}
   #review-panel.open{right:0;}
@@ -374,6 +386,17 @@
 
 <div id="lightbox" onclick="closeLightbox()">
   <img id="lightbox-img" src="" alt="Full size preview">
+</div>
+
+<!-- Latest upload banner -->
+<div id="latest-banner">
+  <img id="latest-banner-img" src="" alt="Latest upload">
+  <div id="latest-banner-body">
+    <div id="latest-banner-label">Latest upload</div>
+    <div id="latest-banner-name"></div>
+    <div id="latest-banner-meta"></div>
+  </div>
+  <button id="latest-banner-close" onclick="dismissLatestBanner()"><i class="ti ti-x"></i></button>
 </div>
 
 <div id="dup-overlay">
@@ -622,6 +645,11 @@ async function loadFromDrive(){
       localStorage.setItem('gbp_tech_review',JSON.stringify(techReview));
     }catch(e){}
     renderPendingPanel();updateStats();checkNoPhotos();updateReviewBadge();
+    // Show banner for most recent tech review item if any arrived
+    if(techReview.length>0){
+      const newest=[...techReview].sort((a,b)=>new Date(b.submittedAt||0)-new Date(a.submittedAt||0))[0];
+      if(newest)showLatestBanner(newest);
+    }
     if(photos.length>0){
       const bounds=L.latLngBounds(photos.map(p=>[p.lat,p.lng]));
       map.fitBounds(bounds,{padding:[60,60]});
@@ -1597,6 +1625,7 @@ window.submitTechUpload=async function(){
       techReview.push(reviewItem);
       save();
       updateReviewBadge();
+      if(!isTechMode)showLatestBanner(reviewItem);
       progress.style.display='none';
       document.getElementById('tech-upload-form').style.display='none';
       document.getElementById('tech-success').style.display='block';
@@ -1621,6 +1650,36 @@ window.resetTechForm=function(){
   document.getElementById('tech-upload-form').style.display='block';
   document.getElementById('tech-success').style.display='none';
 };
+
+// Latest upload banner
+function showLatestBanner(item){
+  // item can be a techReview item or a photo
+  const banner=document.getElementById('latest-banner');
+  if(!banner)return;
+  const img=document.getElementById('latest-banner-img');
+  const nameEl=document.getElementById('latest-banner-name');
+  const metaEl=document.getElementById('latest-banner-meta');
+  if(item.thumb)img.src=item.thumb;
+  img.style.display=item.thumb?'block':'none';
+  // Name: photo filename cleaned up, or desc
+  const displayName=item.desc||item.locationHint||item.name||'New photo';
+  nameEl.textContent=displayName;
+  // Meta: who + when + brand
+  const brand=brandLabels[item.brand]||item.brand||'';
+  const who=item.submittedBy?`${item.submittedBy} · `:'';
+  const when=item.submittedAt?new Date(item.submittedAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})+' · ':'';
+  metaEl.textContent=`${who}${when}${brand}`;
+  banner.style.display='flex';
+  // Auto-dismiss after 8 seconds
+  clearTimeout(window._bannerTimer);
+  window._bannerTimer=setTimeout(()=>dismissLatestBanner(),8000);
+}
+
+function dismissLatestBanner(){
+  const banner=document.getElementById('latest-banner');
+  if(banner)banner.style.display='none';
+  clearTimeout(window._bannerTimer);
+}
 
 // Review panel
 function updateReviewBadge(){
