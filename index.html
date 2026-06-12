@@ -462,6 +462,8 @@ const FOLDER_KEY='gbp_drive_folder_id';
 const HARDCODED_FOLDER_ID='1YQWcxmqLJGD6dRJmaJRUyx4XCOO0fcvv';
 const PENDING_REVIEW_FOLDER_NAME='Pending Review';
 const PENDING_REVIEW_KEY='gbp_pending_review_folder_id';
+const DENIED_FOLDER_NAME='Denied';
+const DENIED_FOLDER_KEY='gbp_denied_folder_id';
 const DATA_FILE_KEY='gbp_drive_data_file_id';
 const DRIVE_FOLDER_NAME='GBP Photo Inventory';
 const DRIVE_DATA_FILENAME='gbp-map-data.json';
@@ -471,7 +473,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'�
 
 let photos=[],pending=[],markers={};
 let activeBrand='all',showUsed=false,panelOpen=true;
-let pickerApiLoaded=false,oauthToken=null,driveFolderId=null,driveDataFileId=null,pendingReviewFolderId=null,saveTimer=null;
+let pickerApiLoaded=false,oauthToken=null,driveFolderId=null,driveDataFileId=null,pendingReviewFolderId=null,deniedFolderId=null,saveTimer=null;
 let techReview=[];
 let deletedIds=new Set();
 let suggestTimers={};
@@ -1037,6 +1039,30 @@ async function getOrCreatePendingReviewFolder(){
   pendingReviewFolderId=created.id;
   localStorage.setItem(PENDING_REVIEW_KEY,pendingReviewFolderId);
   return pendingReviewFolderId;
+}
+
+async function getOrCreateDeniedFolder(){
+  if(deniedFolderId)return deniedFolderId;
+  try{const c=localStorage.getItem(DENIED_FOLDER_KEY);if(c){deniedFolderId=c;return c;}}catch(e){}
+  const search=await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${DENIED_FOLDER_NAME}' and '${HARDCODED_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+    {headers:{Authorization:`Bearer ${oauthToken}`}}
+  );
+  const sd=await search.json();
+  if(sd.files&&sd.files.length>0){
+    deniedFolderId=sd.files[0].id;
+    localStorage.setItem(DENIED_FOLDER_KEY,deniedFolderId);
+    return deniedFolderId;
+  }
+  const create=await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true',{
+    method:'POST',
+    headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+    body:JSON.stringify({name:DENIED_FOLDER_NAME,mimeType:'application/vnd.google-apps.folder',parents:[HARDCODED_FOLDER_ID]})
+  });
+  const created=await create.json();
+  deniedFolderId=created.id;
+  localStorage.setItem(DENIED_FOLDER_KEY,deniedFolderId);
+  return deniedFolderId;
 }
 
 async function moveFileToDriveFolder(fileId, targetFolderId){
@@ -2078,30 +2104,12 @@ window.denyReview=async function(id){
   const p=techReview[idx];
   const btn=document.querySelector(`#review-card-${id} .btn-review-deny`);
   if(btn){btn.disabled=true;btn.textContent='Deleting...';}
-  // Delete from Drive — try permanent delete first, fall back to trash
+  // Move to Denied folder instead of deleting — can't delete files owned by other accounts
   if(p.driveId&&oauthToken){
     try{
-      const delResp=await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
-        method:'DELETE',headers:{Authorization:`Bearer ${oauthToken}`}
-      });
-      if(!delResp.ok&&delResp.status!==204){
-        // Fallback — move to trash if delete fails
-        await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
-          method:'PATCH',
-          headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
-          body:JSON.stringify({trashed:true})
-        });
-      }
-    }catch(e){
-      // Last resort — try trash
-      try{
-        await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
-          method:'PATCH',
-          headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
-          body:JSON.stringify({trashed:true})
-        });
-      }catch(e2){console.error('Drive delete/trash failed:',e2);}
-    }
+      const deniedFolder=await getOrCreateDeniedFolder();
+      await moveFileToDriveFolder(p.driveId,deniedFolder);
+    }catch(e){console.error('Move to denied failed:',e);}
   }
   // Mark as deleted so sync never restores it
   deletedIds.add(p.id);
@@ -2115,7 +2123,7 @@ window.denyReview=async function(id){
   if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>{card.remove();if(!techReview.length)renderReviewPanel();},300);}
   const countEl=document.getElementById('review-count');
   if(countEl&&techReview.length)countEl.textContent=`(${techReview.length})`;
-  toast('Photo denied and deleted from Drive.');
+  toast('Photo denied — moved to Denied folder in Drive.');
 };
 
 loadConfig();load();loadPickerApi();
