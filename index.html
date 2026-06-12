@@ -936,9 +936,15 @@ window.removePhoto=async function(id){
   // Delete file from Drive
   if(p.driveId&&oauthToken){
     try{
-      await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}`,{
+      const delResp=await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
         method:'DELETE',headers:{Authorization:`Bearer ${oauthToken}`}
       });
+      if(!delResp.ok&&delResp.status!==204){
+        await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
+          method:'PATCH',headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+          body:JSON.stringify({trashed:true})
+        });
+      }
     }catch(e){console.error('Drive delete failed:',e);}
   }
   delete markers[id];
@@ -1590,9 +1596,15 @@ window.deletePending=async function(id){
   // Delete file from Drive
   if(p.driveId&&oauthToken){
     try{
-      await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}`,{
+      const delResp=await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
         method:'DELETE',headers:{Authorization:`Bearer ${oauthToken}`}
       });
+      if(!delResp.ok&&delResp.status!==204){
+        await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
+          method:'PATCH',headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+          body:JSON.stringify({trashed:true})
+        });
+      }
     }catch(e){console.error('Drive delete failed:',e);}
   }
   pending.splice(idx,1);
@@ -2066,13 +2078,30 @@ window.denyReview=async function(id){
   const p=techReview[idx];
   const btn=document.querySelector(`#review-card-${id} .btn-review-deny`);
   if(btn){btn.disabled=true;btn.textContent='Deleting...';}
-  // Delete from Drive
+  // Delete from Drive — try permanent delete first, fall back to trash
   if(p.driveId&&oauthToken){
     try{
-      await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}`,{
+      const delResp=await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
         method:'DELETE',headers:{Authorization:`Bearer ${oauthToken}`}
       });
-    }catch(e){console.error('Drive delete failed:',e);}
+      if(!delResp.ok&&delResp.status!==204){
+        // Fallback — move to trash if delete fails
+        await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
+          method:'PATCH',
+          headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+          body:JSON.stringify({trashed:true})
+        });
+      }
+    }catch(e){
+      // Last resort — try trash
+      try{
+        await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
+          method:'PATCH',
+          headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+          body:JSON.stringify({trashed:true})
+        });
+      }catch(e2){console.error('Drive delete/trash failed:',e2);}
+    }
   }
   // Mark as deleted so sync never restores it
   deletedIds.add(p.id);
