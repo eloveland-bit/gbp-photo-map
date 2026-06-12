@@ -954,7 +954,7 @@ function ensureAuth(callback){
   function doAuth(){
     const client=google.accounts.oauth2.initTokenClient({
       client_id:config.clientId,
-      scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+      scope:'https://www.googleapis.com/auth/drive',
       callback:(resp)=>{
         if(resp.error){
           if(resp.error==='access_denied'||resp.error==='interaction_required'||resp.error==='login_required'){
@@ -2111,7 +2111,7 @@ setInterval(()=>{
   try{
     const client=google.accounts.oauth2.initTokenClient({
       client_id:config.clientId,
-      scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+      scope:'https://www.googleapis.com/auth/drive',
       callback:(resp)=>{
         if(resp.access_token)oauthToken=resp.access_token;
       }
@@ -2150,7 +2150,7 @@ function tryAutoSignIn(){
   try{
     const client=google.accounts.oauth2.initTokenClient({
       client_id:config.clientId,
-      scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+      scope:'https://www.googleapis.com/auth/drive',
       callback:(resp)=>{
         if(resp.error||!resp.access_token){
           if(resp.error&&resp.error!=='suppressed_by_user')showAccessBanner();
