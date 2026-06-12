@@ -655,8 +655,15 @@ async function loadFromDrive(){
     driveDeletedIds.forEach(id=>deletedIds.add(id));
 
     // Rebuild from merged set
-    const driveTechReview = (data.techReview||[]).filter(p=>!deletedIds.has(p.id)&&!deletedIds.has(p.driveId));
-    const localTechReviewOnly = techReview.filter(p => !driveTechReview.find(dp=>dp.id===p.id)&&!deletedIds.has(p.id)&&!deletedIds.has(p.driveId));
+    const driveTechReview = (data.techReview||[]).filter(p=>
+      !deletedIds.has(p.id)&&!deletedIds.has(p.driveId)&&
+      !allPinnedIds.has(p.id)&&!allPinnedDriveIds.has(p.driveId)
+    );
+    const localTechReviewOnly = techReview.filter(p =>
+      !driveTechReview.find(dp=>dp.id===p.id)&&
+      !deletedIds.has(p.id)&&!deletedIds.has(p.driveId)&&
+      !allPinnedIds.has(p.id)&&!allPinnedDriveIds.has(p.driveId)
+    );
     Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
     photos = [...drivePhotos, ...localOnly];
@@ -1913,11 +1920,15 @@ window.acceptReview=async function(id){
     pending.push({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null});
     renderPendingPanel();
   }
+  // Mark as processed so sync never restores it to the review queue
+  deletedIds.add(p.id);
   techReview.splice(idx,1);
+  // Write to localStorage immediately
+  try{localStorage.setItem('gbp_tech_review',JSON.stringify(techReview));}catch(e){}
   save();
-  if(oauthToken)saveToDrive();
+  // Await Drive save before anything can sync back
+  if(oauthToken)await saveToDrive();
   updateStats();updateReviewBadge();
-  // Animate card out
   const card=document.getElementById(`review-card-${id}`);
   if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>{card.remove();if(!techReview.length)renderReviewPanel();},300);}
   const countEl=document.getElementById('review-count');
@@ -1938,8 +1949,14 @@ window.denyReview=async function(id){
       });
     }catch(e){console.error('Drive delete failed:',e);}
   }
+  // Mark as deleted so sync never restores it
+  deletedIds.add(p.id);
+  if(p.driveId)deletedIds.add(p.driveId);
   techReview.splice(idx,1);
-  save();updateReviewBadge();
+  try{localStorage.setItem('gbp_tech_review',JSON.stringify(techReview));}catch(e){}
+  save();
+  if(oauthToken)await saveToDrive();
+  updateReviewBadge();
   const card=document.getElementById(`review-card-${id}`);
   if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>{card.remove();if(!techReview.length)renderReviewPanel();},300);}
   const countEl=document.getElementById('review-count');
