@@ -1132,10 +1132,14 @@ function hashDistance(h1,h2){
 
 function findDuplicate(hash){
   // Distance of 5 or less out of 64 bits = same photo
+  // Check all three arrays — map pins, pending GPS tray, and review queue
   for(const p of photos){
     if(p.hash&&hashDistance(p.hash,hash)<=5)return p;
   }
   for(const p of pending){
+    if(p.hash&&hashDistance(p.hash,hash)<=5)return p;
+  }
+  for(const p of techReview){
     if(p.hash&&hashDistance(p.hash,hash)<=5)return p;
   }
   return null;
@@ -1144,7 +1148,7 @@ function findDuplicate(hash){
 // Show duplicate confirmation modal — returns promise resolving to true (upload) or false (skip)
 function confirmDuplicate(existingPhoto, newThumb){
   return new Promise((resolve)=>{
-    const existing=photos.find(p=>p.id===existingPhoto.id)||pending.find(p=>p.id===existingPhoto.id);
+    const existing=photos.find(p=>p.id===existingPhoto.id)||pending.find(p=>p.id===existingPhoto.id)||techReview.find(p=>p.id===existingPhoto.id);
     document.getElementById('dup-existing-thumb').src=existing?.thumb||'';
     document.getElementById('dup-new-thumb').src=newThumb;
     document.getElementById('dup-overlay').style.display='flex';
