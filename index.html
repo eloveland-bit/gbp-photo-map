@@ -455,6 +455,8 @@ const PENDING_KEY='gbp_photo_pending_v6';
 const CONFIG_KEY='gbp_config_v1';
 const FOLDER_KEY='gbp_drive_folder_id';
 const HARDCODED_FOLDER_ID='1YQWcxmqLJGD6dRJmaJRUyx4XCOO0fcvv';
+const PENDING_REVIEW_FOLDER_NAME='Pending Review';
+const PENDING_REVIEW_KEY='gbp_pending_review_folder_id';
 const DATA_FILE_KEY='gbp_drive_data_file_id';
 const DRIVE_FOLDER_NAME='GBP Photo Inventory';
 const DRIVE_DATA_FILENAME='gbp-map-data.json';
@@ -464,7 +466,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'�
 
 let photos=[],pending=[],markers={};
 let activeBrand='all',showUsed=false,panelOpen=true;
-let pickerApiLoaded=false,oauthToken=null,driveFolderId=null,driveDataFileId=null,saveTimer=null;
+let pickerApiLoaded=false,oauthToken=null,driveFolderId=null,driveDataFileId=null,pendingReviewFolderId=null,saveTimer=null;
 let techReview=[];
 let deletedIds=new Set();
 let suggestTimers={};
@@ -993,9 +995,50 @@ function loadPickerApi(){
 
 // Drive folder management
 async function getOrCreateFolder(){
-  // Always use the hardcoded shared folder so all devices and accounts sync to the same place
   driveFolderId=HARDCODED_FOLDER_ID;
   return driveFolderId;
+}
+
+async function getOrCreatePendingReviewFolder(){
+  if(pendingReviewFolderId)return pendingReviewFolderId;
+  // Check cache
+  try{const c=localStorage.getItem(PENDING_REVIEW_KEY);if(c){pendingReviewFolderId=c;return c;}}catch(e){}
+  // Search for existing folder
+  const search=await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${PENDING_REVIEW_FOLDER_NAME}' and '${HARDCODED_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+    {headers:{Authorization:`Bearer ${oauthToken}`}}
+  );
+  const sd=await search.json();
+  if(sd.files&&sd.files.length>0){
+    pendingReviewFolderId=sd.files[0].id;
+    localStorage.setItem(PENDING_REVIEW_KEY,pendingReviewFolderId);
+    return pendingReviewFolderId;
+  }
+  // Create it
+  const create=await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true',{
+    method:'POST',
+    headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+    body:JSON.stringify({name:PENDING_REVIEW_FOLDER_NAME,mimeType:'application/vnd.google-apps.folder',parents:[HARDCODED_FOLDER_ID]})
+  });
+  const created=await create.json();
+  pendingReviewFolderId=created.id;
+  localStorage.setItem(PENDING_REVIEW_KEY,pendingReviewFolderId);
+  return pendingReviewFolderId;
+}
+
+async function moveFileToDriveFolder(fileId, targetFolderId){
+  // Get current parents first
+  const meta=await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents&supportsAllDrives=true`,{
+    headers:{Authorization:`Bearer ${oauthToken}`}
+  });
+  const metaData=await meta.json();
+  const currentParents=(metaData.parents||[]).join(',');
+  // Move by adding new parent and removing old ones
+  await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?addParents=${targetFolderId}&removeParents=${currentParents}&supportsAllDrives=true`,{
+    method:'PATCH',
+    headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+    body:JSON.stringify({})
+  });
 }
 
 async function uploadFileToDrive(file,folderId){
@@ -1748,7 +1791,8 @@ window.submitTechUpload=async function(){
 
   ensureAuth(async()=>{
     try{
-      const folderId=await getOrCreateFolder();
+      // Tech uploads always go to Pending Review folder — moved to market folder on Accept
+      const pendingFolder=await getOrCreatePendingReviewFolder();
       let addedCount=0;
       for(let i=0;i<techSelectedFiles.length;i++){
         const file=techSelectedFiles[i];
@@ -1760,13 +1804,9 @@ window.submitTechUpload=async function(){
           if(!proceed)continue;
         }
         const fileCoords=coords||techSelectedCoords||null;
-        let targetFolderId=folderId;
         let market=null;
-        if(fileCoords){
-          market=detectMarket(fileCoords.lat,fileCoords.lng);
-          if(market){try{targetFolderId=await getOrCreateSubFolder(brand,market);}catch(e){targetFolderId=folderId;}}
-        }
-        const driveFile=await uploadFileToDrive(file,targetFolderId);
+        if(fileCoords)market=detectMarket(fileCoords.lat,fileCoords.lng);
+        const driveFile=await uploadFileToDrive(file,pendingFolder);
         const id=Date.now()+Math.random().toString(36).slice(2);
         const reviewItem={
           id,name:file.name,brand,thumb,hash,
@@ -1911,12 +1951,23 @@ window.acceptReview=async function(id){
   const p=techReview[idx];
   const btn=document.querySelector(`#review-card-${id} .btn-review-accept`);
   if(btn){btn.disabled=true;btn.textContent='Accepting...';}
+  // Move file from Pending Review folder to correct market folder in Drive
+  if(p.driveId&&oauthToken){
+    try{
+      let targetFolderId=HARDCODED_FOLDER_ID;
+      if(p.coords&&p.market){
+        try{targetFolderId=await getOrCreateSubFolder(p.brand,p.market);}catch(e){}
+      }else if(p.coords){
+        const market=detectMarket(p.coords.lat,p.coords.lng);
+        if(market){try{targetFolderId=await getOrCreateSubFolder(p.brand,market);}catch(e){}}
+      }
+      await moveFileToDriveFolder(p.driveId,targetFolderId);
+    }catch(e){console.error('Move failed:',e);}
+  }
   if(p.coords){
-    // Has GPS — pin directly
     const photo={id:p.id,name:p.name,lat:p.coords.lat,lng:p.coords.lng,brand:p.brand,used:false,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,manual:false,market:p.market||'Unknown'};
     photos.push(photo);addMarker(photo);refreshMarker(photo);
   }else{
-    // No GPS — add to pending tray for manual placement
     pending.push({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null});
     renderPendingPanel();
   }
