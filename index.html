@@ -2118,13 +2118,16 @@ window.denyReview=async function(id){
   const p=techReview[idx];
   const btn=document.querySelector(`#review-card-${id} .btn-review-deny`);
   if(btn){btn.disabled=true;btn.textContent='Deleting...';}
-  // Move to Denied folder instead of deleting — can't delete files owned by other accounts
+  // Rename file with DENIED prefix — works regardless of file ownership
   if(p.driveId&&oauthToken){
     try{
-      const deniedFolder=await getOrCreateDeniedFolder();
-      const pendingFolder=await getOrCreatePendingReviewFolder();
-      await moveFileToDriveFolder(p.driveId,deniedFolder,pendingFolder);
-    }catch(e){console.error('Move to denied failed:',e);}
+      const newName=p.name.startsWith('DENIED — ')?p.name:`DENIED — ${p.name}`;
+      await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
+        method:'PATCH',
+        headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+        body:JSON.stringify({name:newName})
+      });
+    }catch(e){console.error('Rename failed:',e);}
   }
   // Mark as deleted so sync never restores it
   deletedIds.add(p.id);
@@ -2138,7 +2141,7 @@ window.denyReview=async function(id){
   if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>{card.remove();if(!techReview.length)renderReviewPanel();},300);}
   const countEl=document.getElementById('review-count');
   if(countEl&&techReview.length)countEl.textContent=`(${techReview.length})`;
-  toast('Photo denied — moved to Denied folder in Drive.');
+  toast('Photo denied — marked in Drive.');
 };
 
 loadConfig();load();loadPickerApi();
