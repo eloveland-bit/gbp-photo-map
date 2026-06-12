@@ -693,6 +693,8 @@ async function loadFromDrive(){
       const newest=[...techReview].sort((a,b)=>new Date(b.submittedAt||0)-new Date(a.submittedAt||0))[0];
       if(newest)showLatestBanner(newest);
     }
+    // Scan Pending Review folder for orphaned files (uploaded but review record missing)
+    scanPendingReviewFolder();
     if(photos.length>0){
       const bounds=L.latLngBounds(photos.map(p=>[p.lat,p.lng]));
       map.fitBounds(bounds,{padding:[60,60]});
@@ -1824,11 +1826,21 @@ window.submitTechUpload=async function(){
         techReview.push(reviewItem);
         addedCount++;
       }
-      save();updateReviewBadge();
-      if(techReview.length>0){
-        const newest=[...techReview].sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt))[0];
-        if(!isTechMode)showLatestBanner(newest);
+      // Save to localStorage immediately
+      try{localStorage.setItem('gbp_tech_review',JSON.stringify(techReview));}catch(e){}
+      save();
+      // Await Drive save — this is critical, don't show success until it completes
+      progress.textContent='Saving to Drive...';
+      if(oauthToken){
+        try{
+          await saveToDrive();
+        }catch(e){
+          console.error('Drive save failed:',e);
+          // Don't block success — file is in Drive, review item is in localStorage
+          // It will sync next time the marketer opens the map
+        }
       }
+      updateReviewBadge();
       progress.style.display='none';
       document.getElementById('tech-upload-form').style.display='none';
       const successEl=document.getElementById('tech-success');
@@ -1886,6 +1898,59 @@ function dismissLatestBanner(){
   const banner=document.getElementById('latest-banner');
   if(banner)banner.style.display='none';
   clearTimeout(window._bannerTimer);
+}
+
+// Scan Pending Review folder for files not yet in techReview
+async function scanPendingReviewFolder(){
+  if(!oauthToken)return;
+  try{
+    const folderId=await getOrCreatePendingReviewFolder();
+    const resp=await fetch(
+      `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false and mimeType contains 'image/'&fields=files(id,name,mimeType,createdTime)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+      {headers:{Authorization:`Bearer ${oauthToken}`}}
+    );
+    const data=await resp.json();
+    const driveFiles=data.files||[];
+    const knownDriveIds=new Set([
+      ...techReview.map(p=>p.driveId),
+      ...photos.map(p=>p.driveId),
+      ...pending.map(p=>p.driveId)
+    ].filter(Boolean));
+    // Find files in the folder that have no review record
+    const orphans=driveFiles.filter(f=>!knownDriveIds.has(f.id)&&!deletedIds.has(f.id));
+    if(!orphans.length)return;
+    // Fetch thumbnails for orphans and create review items
+    for(const f of orphans){
+      try{
+        const imgResp=await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`,{
+          headers:{Authorization:`Bearer ${oauthToken}`}
+        });
+        const blob=await imgResp.blob();
+        const file=new File([blob],f.name,{type:blob.type});
+        const [thumb,hash,coords]=await Promise.all([getThumb(file),perceptualHash(file),extractEXIF(file)]);
+        // Don't add if it's a duplicate of something we already have
+        const dup=findDuplicate(hash);
+        if(dup)continue;
+        const id=Date.now()+Math.random().toString(36).slice(2);
+        let market=null;
+        if(coords)market=detectMarket(coords.lat,coords.lng);
+        techReview.push({
+          id,name:f.name,brand:'mosquito',thumb,hash,
+          desc:null,driveId:f.id,locationHint:null,
+          coords:coords||null,market:market||null,
+          submittedBy:'Unknown (recovered)',
+          submittedAt:f.createdTime||new Date().toISOString()
+        });
+      }catch(e){console.error('Failed to recover:',f.name,e);}
+    }
+    if(orphans.length>0){
+      save();
+      await saveToDrive();
+      updateReviewBadge();
+      renderReviewPanel();
+      toast(`Recovered ${orphans.length} untracked photo${orphans.length>1?'s':''} from Pending Review folder.`);
+    }
+  }catch(e){console.error('Scan failed:',e);}
 }
 
 // Review panel
