@@ -310,6 +310,11 @@
     <div id="tech-upload-form">
       <h1>Upload Field Photo</h1>
       <p class="tech-subtitle">Add a photo from today's job. Takes about 30 seconds.</p>
+      <div style="background:#FFF8E6;border:0.5px solid #F0C84A;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#5a4200;line-height:1.6;">
+        <strong>Heads up:</strong> When you sign in with Google you may see a warning screen. 
+        That's normal — just click <strong>Advanced</strong> then <strong>Go to the site</strong>. 
+        This is our internal team tool, it only accesses the photo upload folder.
+      </div>
       <label class="tech-drop-zone" id="tech-drop-zone" for="tech-file-input" style="cursor:pointer;display:block;">
         <i class="ti ti-camera"></i>
         <p>Tap to add photos from this job</p>
@@ -954,7 +959,7 @@ function ensureAuth(callback){
   function doAuth(){
     const client=google.accounts.oauth2.initTokenClient({
       client_id:config.clientId,
-      scope:'https://www.googleapis.com/auth/drive',
+      scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
       callback:(resp)=>{
         if(resp.error){
           if(resp.error==='access_denied'||resp.error==='interaction_required'||resp.error==='login_required'){
@@ -2111,7 +2116,7 @@ setInterval(()=>{
   try{
     const client=google.accounts.oauth2.initTokenClient({
       client_id:config.clientId,
-      scope:'https://www.googleapis.com/auth/drive',
+      scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
       callback:(resp)=>{
         if(resp.access_token)oauthToken=resp.access_token;
       }
@@ -2150,7 +2155,7 @@ function tryAutoSignIn(){
   try{
     const client=google.accounts.oauth2.initTokenClient({
       client_id:config.clientId,
-      scope:'https://www.googleapis.com/auth/drive',
+      scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
       callback:(resp)=>{
         if(resp.error||!resp.access_token){
           if(resp.error&&resp.error!=='suppressed_by_user')showAccessBanner();
