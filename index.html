@@ -1065,19 +1065,32 @@ async function getOrCreateDeniedFolder(){
   return deniedFolderId;
 }
 
-async function moveFileToDriveFolder(fileId, targetFolderId){
-  // Get current parents first
-  const meta=await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents&supportsAllDrives=true`,{
-    headers:{Authorization:`Bearer ${oauthToken}`}
-  });
-  const metaData=await meta.json();
-  const currentParents=(metaData.parents||[]).join(',');
-  // Move by adding new parent and removing old ones
-  await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?addParents=${targetFolderId}&removeParents=${currentParents}&supportsAllDrives=true`,{
+async function moveFileToDriveFolder(fileId, targetFolderId, knownCurrentParent){
+  // Try to get current parents — may fail for files owned by other accounts
+  let currentParents=knownCurrentParent||'';
+  if(!currentParents){
+    try{
+      const meta=await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents&supportsAllDrives=true`,{
+        headers:{Authorization:`Bearer ${oauthToken}`}
+      });
+      const metaData=await meta.json();
+      currentParents=(metaData.parents||[]).join(',');
+    }catch(e){}
+  }
+  // Add to target folder, remove from current if known
+  const url=currentParents
+    ?`https://www.googleapis.com/drive/v3/files/${fileId}?addParents=${targetFolderId}&removeParents=${currentParents}&supportsAllDrives=true`
+    :`https://www.googleapis.com/drive/v3/files/${fileId}?addParents=${targetFolderId}&supportsAllDrives=true`;
+  const resp=await fetch(url,{
     method:'PATCH',
     headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
     body:JSON.stringify({})
   });
+  if(!resp.ok){
+    const err=await resp.json().catch(()=>({}));
+    console.error('Move failed:',resp.status,err);
+    throw new Error(`Move failed: ${resp.status}`);
+  }
 }
 
 async function uploadFileToDrive(file,folderId){
@@ -2073,7 +2086,8 @@ window.acceptReview=async function(id){
         const market=detectMarket(p.coords.lat,p.coords.lng);
         if(market){try{targetFolderId=await getOrCreateSubFolder(p.brand,market);}catch(e){}}
       }
-      await moveFileToDriveFolder(p.driveId,targetFolderId);
+      const pendingFolderForMove=await getOrCreatePendingReviewFolder();
+      await moveFileToDriveFolder(p.driveId,targetFolderId,pendingFolderForMove);
     }catch(e){console.error('Move failed:',e);}
   }
   if(p.coords){
@@ -2108,7 +2122,8 @@ window.denyReview=async function(id){
   if(p.driveId&&oauthToken){
     try{
       const deniedFolder=await getOrCreateDeniedFolder();
-      await moveFileToDriveFolder(p.driveId,deniedFolder);
+      const pendingFolder=await getOrCreatePendingReviewFolder();
+      await moveFileToDriveFolder(p.driveId,deniedFolder,pendingFolder);
     }catch(e){console.error('Move to denied failed:',e);}
   }
   // Mark as deleted so sync never restores it
