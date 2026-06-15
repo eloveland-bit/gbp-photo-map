@@ -717,7 +717,8 @@ function guessBrand(name){
   if(n.includes('mosquito'))return'mosquito';
   if(n.includes('lawn'))return'lawn';
   if(n.includes('new-age')||n.includes('newage')||n.includes('lights')||n.includes('jellyfish')||n.includes('nag'))return'newage';
-  return'mosquito';
+  // Fall back to active filter brand if set, otherwise mosquito
+  return(activeBrand&&activeBrand!=='all')?activeBrand:'mosquito';
 }
 
 const brandColors={mosquito:'#185FA5',lawn:'#3B6D11',newage:'#854F0B'};
@@ -1922,7 +1923,7 @@ window.resetTechForm=function(){
   const dz=document.getElementById('tech-drop-zone');if(dz)dz.style.display='block';
   const loc=document.getElementById('tech-location');if(loc)loc.value='';
   const desc=document.getElementById('tech-desc');if(desc)desc.value='';
-  const brand=document.getElementById('tech-brand');if(brand)brand.value='mosquito';
+  const brand=document.getElementById('tech-brand');if(brand)brand.value=(activeBrand&&activeBrand!=='all')?activeBrand:'mosquito';
   const btn=document.getElementById('tech-submit-btn');
   if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-cloud-upload"></i> Upload Photo';}
   const form=document.getElementById('tech-upload-form');if(form)form.style.display='block';
@@ -1994,7 +1995,7 @@ async function scanPendingReviewFolder(){
         let market=null;
         if(coords)market=detectMarket(coords.lat,coords.lng);
         techReview.push({
-          id,name:f.name,brand:'mosquito',thumb,hash,
+          id,name:f.name,brand:(activeBrand&&activeBrand!=='all')?activeBrand:'mosquito',thumb,hash,
           desc:null,driveId:f.id,locationHint:null,
           coords:coords||null,market:market||null,
           submittedBy:'Unknown (recovered)',
