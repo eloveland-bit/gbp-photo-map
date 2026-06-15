@@ -269,6 +269,9 @@
         <i class="ti ti-inbox"></i> Review
         <span id="review-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;">0</span>
       </button>
+      <button class="icon-btn marketer-only" id="sort-btn" onclick="sortExistingPhotos()" title="Move existing photos to their market subfolders in Drive">
+        <i class="ti ti-folders"></i> Sort Drive
+      </button>
       <button class="icon-btn marketer-only" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
       <label class="icon-btn marketer-only" style="cursor:pointer">
         <i class="ti ti-file-import"></i> Import CSV
@@ -1218,13 +1221,13 @@ function confirmDuplicate(existingPhoto, newThumb){
 
 // Market definitions — bounding boxes for each market
 const MARKETS = [
-  { name: 'Chattanooga', bounds: { minLat: 34.85, maxLat: 35.25, minLng: -85.55, maxLng: -85.05 } },
-  { name: 'Knoxville',   bounds: { minLat: 35.75, maxLat: 36.20, minLng: -84.25, maxLng: -83.65 } },
-  { name: 'Huntsville',  bounds: { minLat: 34.55, maxLat: 34.90, minLng: -86.75, maxLng: -86.35 } },
-  { name: 'Birmingham',  bounds: { minLat: 33.35, maxLat: 33.65, minLng: -87.05, maxLng: -86.55 } },
-  { name: 'Cincinnati',  bounds: { minLat: 39.00, maxLat: 39.35, minLng: -84.75, maxLng: -84.25 } },
-  { name: 'Northern Kentucky', bounds: { minLat: 38.85, maxLat: 39.10, minLng: -84.75, maxLng: -84.15 } },
-  { name: 'Dayton',      bounds: { minLat: 39.55, maxLat: 39.90, minLng: -84.35, maxLng: -84.00 } },
+  { name: 'Chattanooga', bounds: { minLat: 34.70, maxLat: 35.35, minLng: -85.70, maxLng: -84.90 } },
+  { name: 'Knoxville',   bounds: { minLat: 35.65, maxLat: 36.30, minLng: -84.40, maxLng: -83.50 } },
+  { name: 'Huntsville',  bounds: { minLat: 34.40, maxLat: 35.05, minLng: -87.00, maxLng: -86.10 } },
+  { name: 'Birmingham',  bounds: { minLat: 33.20, maxLat: 33.80, minLng: -87.20, maxLng: -86.40 } },
+  { name: 'Cincinnati',  bounds: { minLat: 39.00, maxLat: 39.45, minLng: -84.90, maxLng: -84.10 } },
+  { name: 'Northern Kentucky', bounds: { minLat: 38.70, maxLat: 39.15, minLng: -84.90, maxLng: -84.00 } },
+  { name: 'Dayton',      bounds: { minLat: 39.45, maxLat: 40.00, minLng: -84.50, maxLng: -83.85 } },
 ];
 
 function detectMarket(lat, lng) {
@@ -2007,6 +2010,39 @@ async function scanPendingReviewFolder(){
       toast(`Recovered ${orphans.length} untracked photo${orphans.length>1?'s':''} from Pending Review folder.`);
     }
   }catch(e){console.error('Scan failed:',e);}
+}
+
+// Sort existing Drive photos into market subfolders
+async function sortExistingPhotos(){
+  if(!oauthToken){toast('Sign in first — click Sync.');return;}
+  const btn=document.getElementById('sort-btn');
+  if(btn){btn.style.opacity='0.5';btn.style.pointerEvents='none';}
+  showLoading('Sorting photos into market folders...');
+  let moved=0,skipped=0,failed=0;
+  const toSort=photos.filter(p=>p.driveId&&p.lat&&p.lng);
+  for(let i=0;i<toSort.length;i++){
+    const p=toSort[i];
+    updateLoadingProgress(`${i+1} of ${toSort.length} — ${p.name}`);
+    const market=detectMarket(p.lat,p.lng);
+    if(!market){skipped++;continue;}
+    try{
+      const targetFolderId=await getOrCreateSubFolder(p.brand,market);
+      // Check if already in the right folder by trying to move
+      // (move is idempotent if already in target)
+      await moveFileToDriveFolder(p.driveId,targetFolderId,HARDCODED_FOLDER_ID);
+      // Update market on the photo object
+      p.market=market;
+      moved++;
+    }catch(e){
+      console.error('Sort failed for',p.name,e);
+      failed++;
+    }
+  }
+  save();
+  if(oauthToken)await saveToDrive();
+  hideLoading();
+  if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
+  toast(`Sorted ${moved} photo${moved!==1?'s':''}${skipped>0?` · ${skipped} no market match`:''}${failed>0?` · ${failed} failed`:''}.`);
 }
 
 // Review panel
