@@ -237,6 +237,11 @@
   body.tech-mode .marketer-only{display:none!important;}
   #tech-banner{display:none;padding:8px 16px;background:var(--green);color:#fff;font-size:13px;align-items:center;justify-content:center;gap:8px;flex-shrink:0;font-weight:500;}
   body.tech-mode #tech-banner{display:flex;}
+  /* View mode */
+  body.view-mode .marketer-only{display:none!important;}
+  body.view-mode .view-hidden{display:none!important;}
+  #view-banner{display:none;padding:7px 16px;background:var(--bg-secondary);border-bottom:0.5px solid var(--border-light);font-size:12px;color:var(--text-secondary);align-items:center;justify-content:center;gap:6px;flex-shrink:0;}
+  body.view-mode #view-banner{display:flex;}
 </style>
 </head>
 <body>
@@ -245,15 +250,19 @@
     <i class="ti ti-camera" style="font-size:16px"></i>
     Tech upload mode — drop photos or tap Upload to Drive
   </div>
+  <div id="view-banner">
+    <i class="ti ti-eye" style="font-size:14px"></i>
+    View only — sign in to manage photos
+  </div>
   <div id="toolbar">
-    <button class="icon-btn success" id="upload-btn" onclick="triggerUpload()">
+    <button class="icon-btn success view-hidden" id="upload-btn" onclick="triggerUpload()">
       <i class="ti ti-cloud-upload"></i> Upload to Drive
     </button>
     <input type="file" id="file-input" multiple accept="image/*" style="display:none">
-    <button class="icon-btn primary marketer-only" id="drive-btn" onclick="openDrivePicker()">
+    <button class="icon-btn primary marketer-only view-hidden" id="drive-btn" onclick="openDrivePicker()">
       <i class="ti ti-brand-google-drive"></i> Add from Drive
     </button>
-    <button class="icon-btn" id="sync-btn" onclick="manualSync()">
+    <button class="icon-btn view-hidden" id="sync-btn" onclick="manualSync()">
       <i class="ti ti-refresh"></i> <span id="sync-label">Sync</span>
     </button>
     <div class="tb-group">
@@ -482,7 +491,9 @@ let deletedIds=new Set();
 let suggestTimers={};
 let config={clientId:'788046954081-1ojin1jscuit4vujd76qcinm3hjsgiq4.apps.googleusercontent.com',domain:'eloveland-bit.github.io'};
 const isTechMode=new URLSearchParams(window.location.search).has('upload');
+const isViewMode=new URLSearchParams(window.location.search).has('view');
 if(isTechMode)document.body.classList.add('tech-mode');
+if(isViewMode)document.body.classList.add('view-mode');
 
 // Config
 function loadConfig(){
@@ -758,7 +769,7 @@ function buildPhotoCard(p){
     <textarea class="popup-desc-edit" id="desc-input-${p.id}" rows="2" placeholder="What's in this photo?">${p.desc||''}</textarea>
     <button class="popup-desc-save" onclick="saveDesc('${p.id}')">Save</button>
   </div>`;
-  if(!isTechMode){
+  if(!isTechMode&&!isViewMode){
     if(!p.used){
       html+=`<div class="popup-actions"><button class="btn-used" onclick="markUsed('${p.id}')">Mark used</button><button class="btn-remove" onclick="removePhoto('${p.id}')">Remove</button></div>`;
     }else{
@@ -817,6 +828,8 @@ window.openLightbox=function(id){
 window.closeLightbox=function(){document.getElementById('lightbox').style.display='none';};
 
 function showAccessBanner(){
+  // Don't show access banner in view mode
+  if(isViewMode)return;
   document.getElementById('access-screen-request').style.display='flex';
   document.getElementById('access-screen-sent').style.display='none';
   document.getElementById('access-banner').style.display='flex';
@@ -2244,6 +2257,12 @@ function manualSync(){
 }
 
 function tryAutoSignIn(){
+  // In view mode, don't require sign-in — just show cached data
+  if(isViewMode){
+    // Load from localStorage cache only
+    updateStats();checkNoPhotos();
+    return;
+  }
   try{
     const client=google.accounts.oauth2.initTokenClient({
       client_id:config.clientId,
@@ -2258,7 +2277,6 @@ function tryAutoSignIn(){
         setSyncState('syncing');
         loadFromDrive().then(()=>{
           setSyncState('synced');
-          // Start auto-sync loop once signed in
           startAutoSync();
         });
       }
