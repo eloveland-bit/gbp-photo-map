@@ -1,805 +1,2539 @@
-#!/usr/bin/env python3
-"""
-Photo Sorter - Folder-based GBP photo tracker
-Tracks which photos have been used vs unused across brands, cities, neighborhoods.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GBP Photo Inventory Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+<style>
+  :root {
+    --bg-primary:#ffffff;--bg-secondary:#f5f5f3;--bg-tertiary:#eeede9;
+    --text-primary:#1a1a18;--text-secondary:#6b6b67;--text-tertiary:#9b9b97;
+    --border-light:rgba(0,0,0,0.12);--border-mid:rgba(0,0,0,0.22);
+    --radius-md:8px;--radius-lg:12px;
+    --blue:#185FA5;--blue-dark:#0C447C;--green:#3B6D11;--amber:#854F0B;--red:#E24B4A;
+    --font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'SF Mono','Fira Code',monospace;
+  }
+  @media(prefers-color-scheme:dark){
+    :root{
+      --bg-primary:#1e1e1c;--bg-secondary:#2a2a28;--bg-tertiary:#323230;
+      --text-primary:#f0efea;--text-secondary:#a0a09a;--text-tertiary:#6b6b67;
+      --border-light:rgba(255,255,255,0.1);--border-mid:rgba(255,255,255,0.2);
+    }
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;font-family:var(--font);background:var(--bg-primary);color:var(--text-primary);}
+  #app{display:flex;flex-direction:column;height:100vh;}
+  #toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:0.5px solid var(--border-light);background:var(--bg-primary);flex-wrap:wrap;flex-shrink:0;}
+  .tb-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .filter-btn{font-size:12px;padding:4px 10px;border-radius:20px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;transition:all 0.15s;font-family:var(--font);}
+  .filter-btn.active{border-color:transparent;color:#fff;}
+  .filter-btn[data-brand="all"].active{background:#555;}
+  .filter-btn[data-brand="mosquito"].active{background:var(--blue);}
+  .filter-btn[data-brand="lawn"].active{background:var(--green);}
+  .filter-btn[data-brand="newage"].active{background:var(--amber);}
+  .toolbar-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+  #stats{font-size:12px;color:var(--text-secondary);white-space:nowrap;}
+  .toggle-used{font-size:12px;padding:4px 10px;border-radius:20px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;font-family:var(--font);}
+  .toggle-used.active{background:var(--bg-secondary);color:var(--text-primary);}
+  .icon-btn{display:flex;align-items:center;gap:5px;font-size:12px;padding:5px 10px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;font-family:var(--font);transition:background 0.15s;white-space:nowrap;}
+  .icon-btn:hover{background:var(--bg-secondary);color:var(--text-primary);}
+  .icon-btn i{font-size:14px;}
+  .icon-btn.primary{background:var(--blue);color:#fff;border-color:transparent;}
+  .icon-btn.primary:hover{background:var(--blue-dark);}
+  .icon-btn.success{background:var(--green);color:#fff;border-color:transparent;}
 
-Usage:
-    python photo_sorter.py setup             # First-time setup
-    python photo_sorter.py import            # Import photos from _inbox/
-    python photo_sorter.py list              # List unused photos
-    python photo_sorter.py used <id>         # Mark a photo as used
-    python photo_sorter.py stats             # Show inventory + last upload dates
-    python photo_sorter.py search <term>     # Search by tag
-    python photo_sorter.py reassign <id>     # Fix brand/city/neighborhood
-    python photo_sorter.py dupes             # Scan library for duplicate photos
-    python photo_sorter.py last-uploads      # Show most recent upload per location
-    python photo_sorter.py menu              # Interactive menu (recommended)
-"""
+  #drop-zone-overlay{display:none;position:fixed;inset:0;background:rgba(24,95,165,0.12);border:3px dashed var(--blue);z-index:2000;align-items:center;justify-content:center;pointer-events:none;}
+  #drop-zone-overlay p{font-size:18px;font-weight:500;color:var(--blue);}
+  #config-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:3000;align-items:center;justify-content:center;}
+  #config-modal{background:var(--bg-primary);border-radius:var(--radius-lg);border:0.5px solid var(--border-mid);padding:24px;width:460px;max-width:90vw;}
+  #config-modal h2{font-size:16px;font-weight:500;margin-bottom:6px;}
+  #config-modal p{font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.6;}
+  #config-modal label{font-size:12px;color:var(--text-secondary);display:block;margin-bottom:5px;}
+  #config-modal input{width:100%;font-size:13px;padding:7px 10px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);font-family:var(--font);margin-bottom:14px;}
+  #config-modal input:focus{outline:none;border-color:var(--blue);}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end;}
+  .btn-cancel{font-size:13px;padding:7px 16px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;font-family:var(--font);}
+  .btn-save{font-size:13px;padding:7px 16px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);}
+  .btn-save:hover{background:var(--blue-dark);}
+  #manual-panel{display:none;border-bottom:0.5px solid var(--border-light);background:var(--bg-secondary);flex-shrink:0;}
+  body.tech-mode #manual-panel{display:none!important;}
+  #manual-header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;cursor:pointer;}
+  #manual-header-left{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;}
+  #manual-badge{background:var(--red);color:#fff;font-size:11px;font-weight:500;padding:1px 7px;border-radius:10px;}
+  #manual-collapse-btn{background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:14px;}
+  #manual-body{padding:0 14px 12px;display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;}
+  .manual-row{display:grid;grid-template-columns:52px 1fr 2fr auto auto auto;gap:8px;align-items:center;padding:8px 10px;background:var(--bg-primary);border:0.5px solid var(--border-light);border-radius:var(--radius-md);}
+  .manual-thumb{width:52px;height:52px;object-fit:cover;border-radius:6px;display:block;cursor:zoom-in;flex-shrink:0;}
+  .manual-thumb-placeholder{width:52px;height:52px;border-radius:6px;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:18px;flex-shrink:0;}
+  .ai-suggestion{grid-column:1/-1;display:flex;align-items:flex-start;gap:8px;padding:7px 10px;background:var(--bg-secondary);border-radius:6px;font-size:12px;margin-top:-2px;}
+  .ai-suggestion-icon{font-size:14px;color:var(--blue);flex-shrink:0;margin-top:1px;}
+  .ai-suggestion-text{flex:1;color:var(--text-secondary);line-height:1.5;}
+  .ai-suggestion-text strong{color:var(--text-primary);}
+  .ai-suggestion-text .confidence-high{color:var(--green);}
+  .ai-suggestion-text .confidence-med{color:var(--amber);}
+  .ai-suggestion-text .confidence-low{color:var(--text-tertiary);}
+  .btn-accept-suggestion{font-size:11px;padding:3px 9px;border-radius:6px;background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);white-space:nowrap;flex-shrink:0;}
+  .btn-accept-suggestion:hover{background:var(--blue-dark);}
+  .ai-analyzing{grid-column:1/-1;font-size:12px;color:var(--text-tertiary);padding:4px 0;display:flex;align-items:center;gap:6px;}
+  .ai-dot{width:6px;height:6px;border-radius:50%;background:var(--blue);animation:pulse 1.2s ease-in-out infinite;}
+  .ai-dot:nth-child(2){animation-delay:0.2s;}
+  .ai-dot:nth-child(3){animation-delay:0.4s;}
+  @keyframes pulse{0%,80%,100%{opacity:0.2;}40%{opacity:1;}}
+  .manual-filename{font-size:12px;color:var(--text-secondary);word-break:break-all;}
+  .manual-addr-wrap{position:relative;}
+  .manual-addr{width:100%;font-size:13px;padding:5px 8px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);font-family:var(--font);}
+  .manual-addr:focus{outline:none;border-color:var(--blue);}
+  .suggestions{position:absolute;top:100%;left:0;right:0;z-index:2000;background:var(--bg-primary);border:0.5px solid var(--border-mid);border-radius:var(--radius-md);margin-top:2px;box-shadow:0 4px 16px rgba(0,0,0,0.12);max-height:160px;overflow-y:auto;}
+  .suggestion-item{padding:7px 10px;font-size:12px;color:var(--text-primary);cursor:pointer;border-bottom:0.5px solid var(--border-light);}
+  .suggestion-item:last-child{border-bottom:none;}
+  .suggestion-item:hover{background:var(--bg-secondary);}
+  .brand-select{font-size:12px;padding:5px 6px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);cursor:pointer;font-family:var(--font);}
+  .pin-btn{font-size:12px;padding:5px 12px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);white-space:nowrap;}
+  .pin-btn:hover{background:var(--blue-dark);}
+  .pin-btn:disabled{background:var(--bg-tertiary);color:var(--text-tertiary);cursor:default;}
+  #map-container{flex:1;position:relative;min-height:0;}
+  #map{width:100%;height:100%;}
+  #no-photos{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;z-index:500;}
+  #no-photos i{font-size:40px;color:var(--text-tertiary);}
+  #no-photos p{font-size:14px;color:var(--text-secondary);margin-top:8px;}
+  #no-photos small{font-size:12px;color:var(--text-tertiary);display:block;margin-top:4px;}
+  #loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:4000;align-items:center;justify-content:center;}
+  #loading-box{background:var(--bg-primary);border-radius:var(--radius-lg);padding:24px 32px;text-align:center;border:0.5px solid var(--border-mid);min-width:220px;}
+  #loading-box p{font-size:14px;color:var(--text-secondary);margin-top:10px;}
+  #loading-progress{font-size:12px;color:var(--text-tertiary);margin-top:4px;}
+  .spinner{width:28px;height:28px;border:2.5px solid var(--border-light);border-top-color:var(--blue);border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .popup-wrap{font-family:var(--font);width:250px;}
+  .popup-location-header{font-size:12px;font-weight:500;color:#1a1a18;margin-bottom:6px;}
+  .popup-location-header .popup-coords{margin-bottom:0;margin-top:2px;}
+  .photo-card-scroll{max-height:420px;overflow-y:auto;padding-right:2px;}
+  .photo-card{padding:2px 0;}
+  .photo-card-divider{border-top:0.5px solid rgba(0,0,0,0.1);margin:10px 0;}
+  .popup-img{width:100%;height:130px;object-fit:cover;border-radius:6px;display:block;margin-bottom:8px;cursor:zoom-in;}
+  .popup-name{font-size:12px;font-weight:500;color:#1a1a18;word-break:break-all;margin-bottom:5px;}
+  .popup-desc{font-size:12px;color:#6b6b67;margin-bottom:6px;line-height:1.5;font-style:italic;}
+  .popup-desc-empty{font-size:11px;color:#9b9b97;margin-bottom:6px;cursor:pointer;text-decoration:underline;display:inline-block;}
+  .popup-desc-edit{width:100%;font-size:12px;padding:5px 7px;border-radius:6px;border:0.5px solid rgba(0,0,0,0.2);font-family:var(--font);resize:none;margin-bottom:5px;background:#fff;color:#1a1a18;}
+  .popup-desc-save{font-size:11px;padding:3px 10px;border-radius:6px;background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);}
+  .popup-desc-save:hover{background:var(--blue-dark);}
+  /* Tech upload page */
+  #tech-upload-page{display:none;position:fixed;inset:0;background:var(--bg-primary);z-index:100;overflow-y:auto;}
+  .tech-upload-wrap{max-width:480px;margin:0 auto;padding:24px 20px 40px;}
+  .tech-upload-wrap h1{font-size:20px;font-weight:500;margin-bottom:4px;}
+  .tech-upload-wrap .tech-subtitle{font-size:14px;color:var(--text-secondary);margin-bottom:24px;}
+  .tech-field{margin-bottom:16px;}
+  .tech-field label{font-size:13px;font-weight:500;color:var(--text-primary);display:block;margin-bottom:6px;}
+  .tech-field input,.tech-field select,.tech-field textarea{width:100%;font-size:14px;padding:10px 12px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);font-family:var(--font);}
+  .tech-field input:focus,.tech-field select:focus,.tech-field textarea:focus{outline:none;border-color:var(--blue);}
+  .tech-field textarea{resize:none;height:80px;}
+  .tech-photo-preview{width:100%;height:200px;object-fit:cover;border-radius:var(--radius-md);display:none;margin-bottom:16px;}
+  .tech-photo-grid{display:none;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+  .tech-photo-thumb-wrap{position:relative;aspect-ratio:1;border-radius:var(--radius-md);overflow:hidden;}
+  .tech-photo-thumb-wrap img{width:100%;height:100%;object-fit:cover;display:block;}
+  .tech-photo-remove{position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;line-height:1;}
+  .tech-photo-count{font-size:13px;color:var(--text-secondary);margin-bottom:12px;text-align:center;}
+  .tech-drop-zone{width:100%;padding:32px;border:1.5px dashed var(--border-mid);border-radius:var(--radius-md);text-align:center;cursor:pointer;margin-bottom:16px;transition:background 0.15s;}
+  .tech-drop-zone:hover{background:var(--bg-secondary);}
+  .tech-drop-zone i{font-size:32px;color:var(--text-tertiary);display:block;margin-bottom:8px;}
+  .tech-drop-zone p{font-size:14px;color:var(--text-secondary);}
+  .tech-drop-zone small{font-size:12px;color:var(--text-tertiary);}
+  .tech-addr-wrap{position:relative;}
+  .tech-suggestions{position:absolute;top:100%;left:0;right:0;z-index:2000;background:var(--bg-primary);border:0.5px solid var(--border-mid);border-radius:var(--radius-md);margin-top:2px;box-shadow:0 4px 16px rgba(0,0,0,0.12);max-height:180px;overflow-y:auto;}
+  .tech-suggestion-item{padding:10px 12px;font-size:13px;color:var(--text-primary);cursor:pointer;border-bottom:0.5px solid var(--border-light);}
+  .tech-suggestion-item:last-child{border-bottom:none;}
+  .tech-suggestion-item:hover{background:var(--bg-secondary);}
+  .btn-tech-upload{width:100%;padding:14px;font-size:15px;font-weight:500;border-radius:var(--radius-md);background:var(--green);color:#fff;border:none;cursor:pointer;font-family:var(--font);margin-top:8px;}
+  .btn-tech-upload:hover{background:#2d5509;}
+  .btn-tech-upload:disabled{background:var(--bg-tertiary);color:var(--text-tertiary);cursor:default;}
+  .tech-success{text-align:center;padding:40px 20px;display:none;}
+  .tech-success i{font-size:52px;color:var(--green);margin-bottom:16px;}
+  .tech-success h2{font-size:20px;font-weight:500;margin-bottom:8px;}
+  .tech-success p{font-size:14px;color:var(--text-secondary);margin-bottom:24px;}
+  .btn-tech-another{font-size:14px;padding:10px 24px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);}
+  .tech-progress{font-size:13px;color:var(--text-secondary);text-align:center;margin-top:12px;display:none;}
+  /* Latest upload banner */
+  #latest-banner{display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--bg-primary);border:0.5px solid var(--border-mid);border-radius:var(--radius-lg);
+    box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:10px 14px;z-index:2000;
+    display:none;align-items:center;gap:12px;max-width:380px;width:calc(100% - 40px);}
+  #latest-banner img{width:52px;height:52px;object-fit:cover;border-radius:6px;flex-shrink:0;}
+  #latest-banner-body{flex:1;min-width:0;}
+  #latest-banner-label{font-size:10px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;}
+  #latest-banner-name{font-size:13px;font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #latest-banner-meta{font-size:11px;color:var(--text-secondary);margin-top:1px;}
+  #latest-banner-close{background:none;border:none;cursor:pointer;color:var(--text-tertiary);font-size:16px;padding:4px;flex-shrink:0;}
+  #latest-banner-close:hover{color:var(--text-primary);}
+  /* Review panel */
+  #review-panel{position:fixed;top:0;right:-400px;width:380px;height:100vh;background:var(--bg-primary);border-left:0.5px solid var(--border-mid);z-index:1000;transition:right 0.3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.1);}
+  #review-panel.open{right:0;}
+  #review-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:0.5px solid var(--border-light);flex-shrink:0;}
+  #review-header h3{font-size:15px;font-weight:500;}
+  #review-close{background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:18px;padding:4px;}
+  #review-body{flex:1;overflow-y:auto;padding:16px;}
+  #review-empty{text-align:center;padding:48px 20px;color:var(--text-secondary);}
+  #review-empty i{font-size:40px;color:var(--text-tertiary);display:block;margin-bottom:12px;}
+  .review-card{background:var(--bg-secondary);border-radius:var(--radius-md);overflow:hidden;margin-bottom:16px;border:0.5px solid var(--border-light);}
+  .review-card img{width:100%;height:200px;object-fit:cover;display:block;cursor:zoom-in;}
+  .review-card-body{padding:12px;}
+  .review-card-name{font-size:12px;color:var(--text-tertiary);margin-bottom:6px;word-break:break-all;}
+  .review-card-brand{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;color:#fff;font-weight:500;margin-bottom:6px;}
+  .review-card-location{font-size:13px;color:var(--text-primary);margin-bottom:4px;}
+  .review-card-desc{font-size:12px;color:var(--text-secondary);font-style:italic;margin-bottom:10px;}
+  .review-card-gps{font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);margin-bottom:10px;}
+  .review-card-actions{display:flex;gap:8px;}
+  .btn-review-accept{flex:1;padding:8px;border-radius:var(--radius-md);background:var(--green);color:#fff;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:var(--font);}
+  .btn-review-accept:hover{background:#2d5509;}
+  .btn-review-deny{flex:1;padding:8px;border-radius:var(--radius-md);background:var(--bg-primary);color:var(--red);border:0.5px solid var(--red);cursor:pointer;font-size:13px;font-weight:500;font-family:var(--font);}
+  .btn-review-deny:hover{background:#fff0f0;}
+  #review-badge{display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;margin-left:4px;}
+  .popup-badges{margin-bottom:6px;}
+  .popup-brand-badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;color:#fff;font-weight:500;}
+  .popup-source-tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;margin-left:4px;background:#eeede9;color:#6b6b67;border:0.5px solid rgba(0,0,0,0.12);}
+  .popup-coords{font-size:10px;color:#9b9b97;font-family:var(--font-mono);margin-bottom:8px;}
+  .popup-actions{display:flex;gap:6px;}
+  .popup-actions button{flex:1;font-size:12px;padding:5px 8px;border-radius:6px;cursor:pointer;border:none;font-family:var(--font);}
+  .btn-used{background:#E24B4A;color:#fff;}
+  .btn-used:hover{background:#c73c3b;}
+  .btn-remove{background:#f5f5f3;color:#6b6b67;border:0.5px solid rgba(0,0,0,0.15)!important;}
+  .btn-remove:hover{background:#eeede9;}
+  .btn-undo{background:#f5f5f3;color:#6b6b67;border:0.5px solid rgba(0,0,0,0.15)!important;width:100%;}
+  .btn-undo:hover{background:#eeede9;}
+  .btn-download{display:flex;align-items:center;justify-content:center;gap:5px;width:100%;margin-top:6px;background:#f5f5f3;color:#6b6b67;border:0.5px solid rgba(0,0,0,0.15);font-size:12px;padding:5px 8px;border-radius:6px;font-family:var(--font);cursor:pointer;text-decoration:none;}
+  .btn-download:hover{background:#eeede9;}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#2a2a28;color:#f0efea;padding:9px 18px;border-radius:var(--radius-md);font-size:13px;z-index:9999;pointer-events:none;opacity:1;transition:opacity 0.4s;}
+  .toast.fade{opacity:0;}
+  #lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:5000;align-items:center;justify-content:center;cursor:zoom-out;}
+  #lightbox img{max-width:92vw;max-height:92vh;border-radius:var(--radius-md);object-fit:contain;}
+  #dup-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:7000;align-items:center;justify-content:center;}
+  #dup-modal{background:var(--bg-primary);border-radius:var(--radius-lg);border:0.5px solid var(--border-mid);padding:24px;width:420px;max-width:92vw;}
+  #dup-modal h3{font-size:15px;font-weight:500;margin-bottom:8px;}
+  #dup-modal p{font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.6;}
+  .dup-thumbs{display:flex;gap:12px;margin-bottom:18px;}
+  .dup-thumb-wrap{flex:1;text-align:center;}
+  .dup-thumb-wrap img{width:100%;height:100px;object-fit:cover;border-radius:6px;display:block;}
+  .dup-thumb-wrap span{font-size:11px;color:var(--text-tertiary);display:block;margin-top:4px;}
+  .dup-actions{display:flex;gap:8px;justify-content:flex-end;}
+  .btn-dup-skip{font-size:13px;padding:7px 16px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;font-family:var(--font);}
+  .btn-dup-upload{font-size:13px;padding:7px 16px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);}
+  .btn-dup-upload:hover{background:var(--blue-dark);}
+  #access-banner{display:none;position:fixed;inset:0;background:var(--bg-primary);z-index:6000;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;}
+  #access-screen-request,#access-screen-sent{display:flex;flex-direction:column;align-items:center;max-width:340px;width:100%;}
+  #access-banner i{font-size:48px;color:var(--text-tertiary);margin-bottom:16px;}
+  #access-banner h2{font-size:20px;font-weight:500;margin-bottom:8px;}
+  #access-banner p{font-size:14px;color:var(--text-secondary);margin-bottom:24px;max-width:320px;line-height:1.6;}
+  .access-form{display:flex;flex-direction:column;gap:10px;width:100%;margin-bottom:16px;}
+  .access-form input{width:100%;font-size:14px;padding:10px 12px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);font-family:var(--font);}
+  .access-form input:focus{outline:none;border-color:var(--blue);}
+  #access-banner .btn-request{display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;padding:11px 22px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);text-decoration:none;width:100%;}
+  #access-banner .btn-request:hover{background:var(--blue-dark);}
+  #access-banner .btn-already{margin-top:12px;font-size:13px;color:var(--text-secondary);background:none;border:none;cursor:pointer;font-family:var(--font);text-decoration:underline;}
+  #access-screen-sent i{color:var(--green);}
+  /* Tech mode */
+  body.tech-mode .marketer-only{display:none!important;}
+  #tech-banner{display:none;padding:8px 16px;background:var(--green);color:#fff;font-size:13px;align-items:center;justify-content:center;gap:8px;flex-shrink:0;font-weight:500;}
+  body.tech-mode #tech-banner{display:flex;}
+  /* View mode */
+  body.view-mode .marketer-only{display:none!important;}
+  body.view-mode .view-hidden{display:none!important;}
+  #view-banner{display:none;padding:7px 16px;background:var(--bg-secondary);border-bottom:0.5px solid var(--border-light);font-size:12px;color:var(--text-secondary);align-items:center;justify-content:center;gap:6px;flex-shrink:0;}
+  body.view-mode #view-banner{display:flex;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="tech-banner">
+    <i class="ti ti-camera" style="font-size:16px"></i>
+    Tech upload mode — drop photos or tap Upload to Drive
+  </div>
+  <div id="view-banner">
+    <i class="ti ti-eye" style="font-size:14px"></i>
+    View only — sign in to manage photos
+  </div>
+  <div id="toolbar">
+    <button class="icon-btn success view-hidden" id="upload-btn" onclick="triggerUpload()">
+      <i class="ti ti-cloud-upload"></i> Upload to Drive
+    </button>
+    <input type="file" id="file-input" multiple accept="image/*" style="display:none">
+    <button class="icon-btn primary marketer-only view-hidden" id="drive-btn" onclick="openDrivePicker()">
+      <i class="ti ti-brand-google-drive"></i> Add from Drive
+    </button>
+    <button class="icon-btn view-hidden" id="sync-btn" onclick="manualSync()">
+      <i class="ti ti-refresh"></i> <span id="sync-label">Sync</span>
+    </button>
+    <div class="tb-group">
+      <button class="filter-btn active" data-brand="all">All</button>
+      <button class="filter-btn" data-brand="mosquito">Mosquito Squad</button>
+      <button class="filter-btn" data-brand="lawn">Lawn Squad</button>
+      <button class="filter-btn" data-brand="newage">New Age Lights</button>
+    </div>
+    <div class="toolbar-right">
+      <button class="toggle-used marketer-only" id="toggle-used-btn">Show used</button>
+      <span id="stats" class="marketer-only">0 unused · 0 used</span>
+      <button class="icon-btn marketer-only" id="review-btn" onclick="toggleReviewPanel()" style="position:relative">
+        <i class="ti ti-inbox"></i> Review
+        <span id="review-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;">0</span>
+      </button>
+      <button class="icon-btn marketer-only" id="sort-btn" onclick="sortExistingPhotos()" title="Move existing photos to their market subfolders in Drive">
+        <i class="ti ti-folders"></i> Sort Drive
+      </button>
+      <button class="icon-btn marketer-only" id="geotag-btn" onclick="geotagAllPhotos()" title="Write GPS coordinates into all existing Drive photos">
+        <i class="ti ti-map-pin-bolt"></i> Geotag All
+      </button>
+      <button class="icon-btn marketer-only" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
+      <label class="icon-btn marketer-only" style="cursor:pointer">
+        <i class="ti ti-file-import"></i> Import CSV
+        <input type="file" id="csv-input" accept=".csv" style="display:none">
+      </label>
+    </div>
+  </div>
 
-import os
-import sys
-import shutil
-import sqlite3
-import re
-import hashlib
-from datetime import datetime
-from pathlib import Path
 
-# ============================================================
-# CONFIGURATION - Edit this path to point to your photo library
-# ============================================================
-LIBRARY_ROOT = Path.home() / "PhotoLibrary"
 
-# Your brands and their valid markets/neighborhoods
-BRANDS = {
-    "mosquito-squad": {
-        "chattanooga-tn": ["northshore", "hixson", "ooltewah", "east-brainerd", "signal-mountain"],
-        "knoxville-tn": ["farragut", "karns", "concord"],
-        "huntsville-al": ["madison", "owens-cross-roads", "jones-valley"],
-        "birmingham-al": ["homewood", "vestavia-hills"],
-        "cincinnati-oh": ["hyde-park", "madeira", "indian-hill", "loveland", "blue-ash", "south-dayton"],
-        "northern-ky": ["fort-wright"],
-    },
-    "lawn-squad": {
-        "chattanooga-tn": ["northshore", "hixson", "ooltewah", "east-brainerd", "signal-mountain"],
-        "knoxville-tn": ["farragut", "karns", "concord"],
-        "huntsville-al": ["madison", "owens-cross-roads", "jones-valley"],
-        "birmingham-al": ["homewood", "vestavia-hills"],
-        "cincinnati-oh": ["hyde-park", "madeira", "indian-hill", "loveland", "blue-ash", "south-dayton"],
-        "northern-ky": ["fort-wright"],
-    },
-    "new-age-lights": {
-        "chattanooga-tn": ["northshore", "hixson", "ooltewah", "east-brainerd", "signal-mountain"],
-        "knoxville-tn": ["farragut", "karns", "concord"],
-        "huntsville-al": ["madison", "owens-cross-roads", "jones-valley"],
-        "birmingham-al": ["homewood", "vestavia-hills"],
-        "cincinnati-oh": ["hyde-park", "madeira", "indian-hill", "loveland", "blue-ash", "south-dayton"],
-        "northern-ky": ["fort-wright"],
-    },
+  <div id="drop-zone-overlay">
+    <p><i class="ti ti-cloud-upload" style="font-size:28px;display:block;margin-bottom:8px"></i>Drop to upload to Drive</p>
+  </div>
+
+  <div id="manual-panel">
+    <div id="manual-header">
+      <div id="manual-header-left">
+        <i class="ti ti-map-pin-exclamation" style="color:var(--red);font-size:16px"></i>
+        Photos missing GPS <span id="manual-badge">0</span>
+      </div>
+      <button id="manual-collapse-btn"><i class="ti ti-chevron-up" id="collapse-icon"></i></button>
+    </div>
+    <div id="manual-body"></div>
+  </div>
+
+  <div id="map-container">
+    <div id="no-photos">
+      <i class="ti ti-map-pin-off"></i>
+      <p>Upload photos or add from Drive</p>
+      <small>Photos are pinned by GPS and stored in your Drive</small>
+    </div>
+    <div id="map"></div>
+  </div>
+</div>
+
+<!-- Tech upload page (shown when ?upload in URL) -->
+<div id="tech-upload-page">
+  <div class="tech-upload-wrap">
+    <div id="tech-upload-form">
+      <h1>Upload Field Photo</h1>
+      <p class="tech-subtitle">Add a photo from today's job. Takes about 30 seconds.</p>
+      <div style="background:#FFF8E6;border:0.5px solid #F0C84A;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#5a4200;line-height:1.6;">
+        <strong>Heads up:</strong> When you sign in with Google you may see a warning screen. 
+        That's normal — just click <strong>Advanced</strong> then <strong>Go to the site</strong>. 
+        This is our internal team tool, it only accesses the photo upload folder.
+      </div>
+      <label class="tech-drop-zone" id="tech-drop-zone" for="tech-file-input" style="cursor:pointer;display:block;">
+        <i class="ti ti-camera"></i>
+        <p>Tap to add photos from this job</p>
+        <small>Select one or multiple — JPG or PNG</small>
+      </label>
+      <input type="file" id="tech-file-input" accept="image/*,image/heic,image/heif" multiple style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">
+      <div id="tech-photo-grid" style="display:none;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;"></div>
+      <div class="tech-field">
+        <label>Your name</label>
+        <input type="text" id="tech-name" placeholder="e.g. Jake Miller" autocomplete="name">
+      </div>
+      <div class="tech-field">
+        <label>Brand</label>
+        <select id="tech-brand">
+          <option value="mosquito">Mosquito Squad</option>
+          <option value="lawn">Lawn Squad</option>
+          <option value="newage">New Age Lights</option>
+        </select>
+      </div>
+      <div class="tech-field">
+        <label>Location <span style="color:var(--text-tertiary);font-weight:400">(street, neighborhood, or city)</span></label>
+        <div class="tech-addr-wrap">
+          <input type="text" id="tech-location" placeholder="e.g. 123 Oak St, Hixson TN" autocomplete="off">
+          <div class="tech-suggestions" id="tech-suggestions" style="display:none"></div>
+        </div>
+      </div>
+      <div class="tech-field">
+        <label>Description <span style="color:var(--text-tertiary);font-weight:400">(optional — what's in the photo?)</span></label>
+        <textarea id="tech-desc" placeholder="e.g. Backyard treatment, fence line, before application"></textarea>
+      </div>
+      <button class="btn-tech-upload" id="tech-submit-btn" disabled onclick="submitTechUpload()">
+        <i class="ti ti-cloud-upload"></i> Upload Photo
+      </button>
+      <p class="tech-progress" id="tech-progress"></p>
+    </div>
+    <div class="tech-success" id="tech-success">
+      <i class="ti ti-circle-check"></i>
+      <h2>Photo uploaded!</h2>
+      <p>It's been added to the map and saved to Drive. Nice work.</p>
+      <button class="btn-tech-another" onclick="resetTechForm()">Upload another photo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Review panel -->
+<div id="review-panel">
+  <div id="review-header">
+    <h3>Pending Review <span id="review-count" style="color:var(--text-tertiary);font-weight:400;font-size:13px"></span></h3>
+    <button id="review-close" onclick="toggleReviewPanel()"><i class="ti ti-x"></i></button>
+  </div>
+  <div id="review-body">
+    <div id="review-empty">
+      <i class="ti ti-check"></i>
+      All caught up — no photos waiting for review.
+    </div>
+  </div>
+</div>
+
+<div id="config-overlay" onclick="if(event.target===this)hideConfig()">
+  <div id="config-modal">
+    <h2>Google Drive setup</h2>
+    <p>Add your Google OAuth Client ID to enable Drive upload and the file picker. One-time setup — see the README in your GitHub repo for step-by-step instructions.</p>
+    <label>Google OAuth Client ID</label>
+    <input type="text" id="client-id-input" placeholder="123456789.apps.googleusercontent.com">
+    <label>Your GitHub Pages domain (no https://)</label>
+    <input type="text" id="domain-input" placeholder="yourusername.github.io">
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="hideConfig()">Cancel</button>
+      <button class="btn-save" onclick="saveConfig()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay">
+  <div id="loading-box">
+    <div class="spinner"></div>
+    <p id="loading-msg">Uploading to Drive...</p>
+    <p id="loading-progress"></p>
+  </div>
+</div>
+
+<div id="lightbox" onclick="closeLightbox()">
+  <img id="lightbox-img" src="" alt="Full size preview">
+</div>
+
+<!-- Latest upload banner -->
+<div id="latest-banner">
+  <img id="latest-banner-img" src="" alt="Latest upload">
+  <div id="latest-banner-body">
+    <div id="latest-banner-label">Latest upload</div>
+    <div id="latest-banner-name"></div>
+    <div id="latest-banner-meta"></div>
+  </div>
+  <button id="latest-banner-close" onclick="dismissLatestBanner()"><i class="ti ti-x"></i></button>
+</div>
+
+<div id="dup-overlay">
+  <div id="dup-modal">
+    <h3>Possible duplicate photo</h3>
+    <p id="dup-msg">This photo looks identical to one already on the map. Are you sure you want to upload it again?</p>
+    <div class="dup-thumbs">
+      <div class="dup-thumb-wrap">
+        <img id="dup-existing-thumb" src="" alt="Existing">
+        <span>Already on map</span>
+      </div>
+      <div class="dup-thumb-wrap">
+        <img id="dup-new-thumb" src="" alt="New">
+        <span>New upload</span>
+      </div>
+    </div>
+    <div class="dup-actions">
+      <button class="btn-dup-skip" id="dup-skip-btn">Skip — don't upload</button>
+      <button class="btn-dup-upload" id="dup-upload-btn">Upload anyway</button>
+    </div>
+  </div>
+</div>
+
+<div id="access-banner">
+  <div id="access-screen-request">
+    <i class="ti ti-lock"></i>
+    <h2>Access required</h2>
+    <p>This tool is for the Mosquito Squad, Lawn Squad, and New Age Lights team. Fill in your details and request access — you'll hear back within 24 hours.</p>
+    <div class="access-form">
+      <input type="text" id="req-name" placeholder="Your name" autocomplete="name">
+      <input type="email" id="req-email" placeholder="Your Google account email" autocomplete="email">
+      <a class="btn-request" id="request-link" href="#" onclick="submitAccessRequest(event)">
+        <i class="ti ti-mail" style="font-size:16px"></i> Send access request
+      </a>
+    </div>
+    <button class="btn-already" onclick="manualSync()">I already have access — sign in</button>
+  </div>
+  <div id="access-screen-sent" style="display:none">
+    <i class="ti ti-circle-check" style="color:var(--green)"></i>
+    <h2>Request sent!</h2>
+    <p>Your request has been sent to the map admin. You'll receive an email once you've been added — usually within 24 hours.</p>
+    <button class="btn-already" onclick="manualSync()">I've been approved — sign in now</button>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY='gbp_photo_map_v6';
+const PENDING_KEY='gbp_photo_pending_v6';
+const CONFIG_KEY='gbp_config_v1';
+const FOLDER_KEY='gbp_drive_folder_id';
+const HARDCODED_FOLDER_ID='1YQWcxmqLJGD6dRJmaJRUyx4XCOO0fcvv';
+const PENDING_REVIEW_FOLDER_NAME='Pending Review';
+const PENDING_REVIEW_KEY='gbp_pending_review_folder_id';
+const DENIED_FOLDER_NAME='Denied';
+const DENIED_FOLDER_KEY='gbp_denied_folder_id';
+const DATA_FILE_KEY='gbp_drive_data_file_id';
+const DRIVE_FOLDER_NAME='GBP Photo Inventory';
+const DRIVE_DATA_FILENAME='gbp-map-data.json';
+
+const map=L.map('map',{zoomControl:true}).setView([35.5,-86.5],6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);
+
+let photos=[],pending=[],markers={};
+let activeBrand='all',showUsed=false,panelOpen=true;
+let pickerApiLoaded=false,oauthToken=null,driveFolderId=null,driveDataFileId=null,pendingReviewFolderId=null,deniedFolderId=null,saveTimer=null;
+let techReview=[];
+let deletedIds=new Set();
+let suggestTimers={};
+let config={clientId:'788046954081-1ojin1jscuit4vujd76qcinm3hjsgiq4.apps.googleusercontent.com',domain:'eloveland-bit.github.io'};
+const isTechMode=new URLSearchParams(window.location.search).has('upload');
+const isViewMode=new URLSearchParams(window.location.search).has('view');
+if(isTechMode)document.body.classList.add('tech-mode');
+if(isViewMode)document.body.classList.add('view-mode');
+
+// Config
+function loadConfig(){
+  try{const c=localStorage.getItem(CONFIG_KEY);if(c)config=JSON.parse(c);}catch(e){}
+  try{driveFolderId=localStorage.getItem(FOLDER_KEY)||null;}catch(e){}
+  try{driveDataFileId=localStorage.getItem(DATA_FILE_KEY)||null;}catch(e){}
+  updateSetupBanner();
+}
+function saveConfig(){
+  config.clientId=document.getElementById('client-id-input').value.trim();
+  config.domain=document.getElementById('domain-input').value.trim();
+  localStorage.setItem(CONFIG_KEY,JSON.stringify(config));
+  hideConfig();updateSetupBanner();toast('Settings saved.');
+}
+function showConfig(){
+  document.getElementById('client-id-input').value=config.clientId;
+  document.getElementById('domain-input').value=config.domain;
+  document.getElementById('config-overlay').style.display='flex';
+}
+function hideConfig(){document.getElementById('config-overlay').style.display='none';}
+function updateSetupBanner(){}
+
+function toast(msg){
+  const el=document.createElement('div');el.className='toast';el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>{el.classList.add('fade');setTimeout(()=>el.remove(),400);},2800);
+}
+function showLoading(msg,progress){
+  document.getElementById('loading-msg').textContent=msg||'Loading...';
+  document.getElementById('loading-progress').textContent=progress||'';
+  document.getElementById('loading-overlay').style.display='flex';
+}
+function updateLoadingProgress(text){document.getElementById('loading-progress').textContent=text;}
+function hideLoading(){document.getElementById('loading-overlay').style.display='none';}
+
+// Serialize current state
+function getStateData(){
+  return {
+    photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null})),
+    pending: pending.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,driveId:p.driveId||null})),
+    techReview: techReview.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null,coords:p.coords||null,submittedBy:p.submittedBy||null,submittedAt:p.submittedAt||null})),
+    deletedIds: Array.from(deletedIds)
+  };
 }
 
-SERVICE_KEYWORDS = {
-    "mosquito-squad": ["mosquito-control", "tick-control", "barrier-treatment", "backyard-treatment", "perimeter-spray"],
-    "lawn-squad": ["lawn-fertilization", "aeration", "overseeding", "weed-control", "lawn-treatment"],
-    "new-age-lights": ["permanent-led-lighting", "jellyfish-lighting", "holiday-lighting", "roofline-lighting", "bosso-lighting"],
+// Save to Drive (debounced 1.5s so rapid changes batch together)
+function save(){
+  // Always cache locally immediately
+  try{
+    const d=getStateData();
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(d.photos));
+    localStorage.setItem(PENDING_KEY,JSON.stringify(d.pending));
+    localStorage.setItem('gbp_tech_review',JSON.stringify(d.techReview));
+  }catch(e){}
+  // Debounce Drive save
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>saveToDrive(),1500);
 }
 
-VALID_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
-
-INBOX = LIBRARY_ROOT / "_inbox"
-UNUSED = LIBRARY_ROOT / "_unused"
-USED = LIBRARY_ROOT / "_used"
-DB_PATH = LIBRARY_ROOT / ".photo-tracker.db"
-
-
-# ============================================================
-# DATABASE (with auto-migration)
-# ============================================================
-def get_db():
-    """Connect to SQLite database, create schema, run migrations."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS photos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            filename TEXT NOT NULL,
-            original_filename TEXT,
-            brand TEXT NOT NULL,
-            city TEXT NOT NULL,
-            neighborhood TEXT NOT NULL,
-            service_keyword TEXT,
-            status TEXT NOT NULL DEFAULT 'unused',
-            current_path TEXT NOT NULL,
-            imported_at TEXT NOT NULL,
-            used_at TEXT,
-            used_for TEXT,
-            notes TEXT
-        )
-    """)
-    # Migration: add file_hash column if missing
-    existing_cols = {r[1] for r in conn.execute("PRAGMA table_info(photos)").fetchall()}
-    if "file_hash" not in existing_cols:
-        conn.execute("ALTER TABLE photos ADD COLUMN file_hash TEXT")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_status ON photos(status)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_brand_city ON photos(brand, city, neighborhood)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_hash ON photos(file_hash)")
-    conn.commit()
-    return conn
-
-
-# ============================================================
-# HELPERS
-# ============================================================
-def hash_file(path, chunk_size=65536):
-    """Compute SHA-256 hash of a file's contents. Detects true content duplicates."""
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        while True:
-            chunk = f.read(chunk_size)
-            if not chunk:
-                break
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def pick_from_list(prompt, options, allow_skip=False):
-    if not options:
-        print(f"No options available for: {prompt}")
-        return None
-    print(f"\n{prompt}")
-    for i, opt in enumerate(options, 1):
-        print(f"  {i}. {opt}")
-    if allow_skip:
-        print(f"  0. (skip)")
-    while True:
-        choice = input("> ").strip()
-        if allow_skip and choice == "0":
-            return None
-        if choice.isdigit() and 1 <= int(choice) <= len(options):
-            return options[int(choice) - 1]
-        print("Invalid choice, try again.")
-
-
-def slugify(text):
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text)
-    text = re.sub(r"[\s_]+", "-", text)
-    return text.strip("-")
-
-
-def build_filename(brand, city, neighborhood, service_keyword, ext, suffix=None):
-    parts = [service_keyword, neighborhood, city]
-    if suffix:
-        parts.append(suffix)
-    base = "-".join(p for p in parts if p)
-    return f"{base}{ext.lower()}"
-
-
-def ensure_unique_filename(target_dir, filename):
-    target = target_dir / filename
-    if not target.exists():
-        return filename
-    stem = target.stem
-    ext = target.suffix
-    counter = 2
-    while (target_dir / f"{stem}-{counter}{ext}").exists():
-        counter += 1
-    return f"{stem}-{counter}{ext}"
-
-
-def pretty_date(iso_str):
-    """Turn an ISO timestamp into 'Apr 16, 2026' style."""
-    if not iso_str:
-        return "never"
-    try:
-        return datetime.fromisoformat(iso_str).strftime("%b %d, %Y")
-    except (ValueError, TypeError):
-        return iso_str[:10]
-
-
-def days_since(iso_str):
-    """How many days since an ISO timestamp. Returns None if not parseable."""
-    if not iso_str:
-        return None
-    try:
-        dt = datetime.fromisoformat(iso_str)
-        return (datetime.now() - dt).days
-    except (ValueError, TypeError):
-        return None
-
-
-# ============================================================
-# SETUP
-# ============================================================
-def cmd_setup():
-    print(f"Setting up photo library at: {LIBRARY_ROOT}")
-    LIBRARY_ROOT.mkdir(parents=True, exist_ok=True)
-    INBOX.mkdir(exist_ok=True)
-    UNUSED.mkdir(exist_ok=True)
-    USED.mkdir(exist_ok=True)
-
-    for brand, cities in BRANDS.items():
-        for city, neighborhoods in cities.items():
-            for nbhd in neighborhoods:
-                (UNUSED / brand / city / nbhd).mkdir(parents=True, exist_ok=True)
-                (USED / brand / city / nbhd).mkdir(parents=True, exist_ok=True)
-
-    get_db().close()
-
-    print("Done. Folder structure created:")
-    print(f"  {INBOX}        <- drop photos here")
-    print(f"  {UNUSED}       <- organized unused photos")
-    print(f"  {USED}         <- auto-moved when marked used")
-    print(f"  {DB_PATH}      <- tracking database")
-
-
-# ============================================================
-# IMPORT (now with duplicate detection)
-# ============================================================
-def cmd_import():
-    if not INBOX.exists():
-        print(f"Inbox not found. Run 'setup' first.")
-        return
-
-    photos = [p for p in INBOX.iterdir() if p.is_file() and p.suffix.lower() in VALID_EXTENSIONS]
-    if not photos:
-        print(f"No photos found in {INBOX}")
-        return
-
-    print(f"\nFound {len(photos)} photo(s) to import.\n")
-    conn = get_db()
-    imported = 0
-    skipped_dupes = 0
-
-    for idx, photo in enumerate(photos, 1):
-        print(f"\n{'='*60}")
-        print(f"Photo {idx}/{len(photos)}: {photo.name}")
-        print(f"{'='*60}")
-
-        # Hash first, check for duplicates before we bother the user with questions
-        print("Checking for duplicates...")
-        try:
-            fhash = hash_file(photo)
-        except OSError as e:
-            print(f"Error reading file: {e}. Skipping.")
-            continue
-
-        existing = conn.execute(
-            "SELECT id, filename, brand, city, neighborhood, status, imported_at "
-            "FROM photos WHERE file_hash = ?", (fhash,)
-        ).fetchone()
-
-        if existing:
-            print(f"\n⚠  DUPLICATE DETECTED")
-            print(f"  This exact file is already in your library:")
-            print(f"  Photo #{existing['id']}  {existing['filename']}")
-            print(f"  Tagged: {existing['brand']} / {existing['city']} / {existing['neighborhood']}")
-            print(f"  Status: {existing['status']}, imported {pretty_date(existing['imported_at'])}")
-            print(f"\n  What do you want to do?")
-            print(f"  1. Skip and delete the inbox copy (recommended)")
-            print(f"  2. Skip but leave in _inbox/ for now")
-            print(f"  3. Import anyway as a separate entry")
-            choice = input("> ").strip()
-            if choice == "1":
-                photo.unlink()
-                print("  Deleted from inbox.")
-                skipped_dupes += 1
-                continue
-            elif choice == "2":
-                print("  Left in inbox.")
-                skipped_dupes += 1
-                continue
-            elif choice != "3":
-                print("  Invalid choice, skipping.")
-                skipped_dupes += 1
-                continue
-            # else fall through and import anyway
-
-        # Tag it
-        brand = pick_from_list("Brand:", list(BRANDS.keys()))
-        if not brand:
-            continue
-        city = pick_from_list("City:", list(BRANDS[brand].keys()))
-        if not city:
-            continue
-        neighborhood = pick_from_list("Neighborhood:", BRANDS[brand][city])
-        if not neighborhood:
-            continue
-
-        services = SERVICE_KEYWORDS.get(brand, [])
-        service = pick_from_list("Service keyword (or pick custom):", services + ["[custom]"])
-        if service == "[custom]":
-            service = slugify(input("Enter custom service keyword: "))
-
-        suffix = input("Optional suffix (e.g. 'before', 'after', 'twilight') or press enter: ").strip()
-        suffix = slugify(suffix) if suffix else None
-
-        new_filename = build_filename(brand, city, neighborhood, service, photo.suffix, suffix)
-        target_dir = UNUSED / brand / city / neighborhood
-        target_dir.mkdir(parents=True, exist_ok=True)
-        new_filename = ensure_unique_filename(target_dir, new_filename)
-        target_path = target_dir / new_filename
-
-        shutil.move(str(photo), str(target_path))
-
-        conn.execute("""
-            INSERT INTO photos (filename, original_filename, brand, city, neighborhood,
-                                service_keyword, status, current_path, imported_at, file_hash)
-            VALUES (?, ?, ?, ?, ?, ?, 'unused', ?, ?, ?)
-        """, (new_filename, photo.name, brand, city, neighborhood,
-              service, str(target_path), datetime.now().isoformat(), fhash))
-        conn.commit()
-        imported += 1
-
-        print(f"\n✓ Moved to: {target_path.relative_to(LIBRARY_ROOT)}")
-
-    conn.close()
-    print(f"\n{'='*60}")
-    print(f"Import complete: {imported} imported, {skipped_dupes} skipped as duplicate.")
-
-
-# ============================================================
-# LIST
-# ============================================================
-def cmd_list(brand=None, city=None, neighborhood=None, status="unused"):
-    conn = get_db()
-    query = "SELECT * FROM photos WHERE status = ?"
-    params = [status]
-    if brand:
-        query += " AND brand = ?"
-        params.append(brand)
-    if city:
-        query += " AND city = ?"
-        params.append(city)
-    if neighborhood:
-        query += " AND neighborhood = ?"
-        params.append(neighborhood)
-    query += " ORDER BY brand, city, neighborhood, imported_at"
-
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-
-    if not rows:
-        print(f"No {status} photos match those filters.")
-        return
-
-    print(f"\n{status.upper()} PHOTOS ({len(rows)} total)")
-    print("=" * 80)
-    current_group = None
-    for r in rows:
-        group = f"{r['brand']} / {r['city']} / {r['neighborhood']}"
-        if group != current_group:
-            print(f"\n[{group}]")
-            current_group = group
-        used_info = f" -> used {r['used_at'][:10]} for '{r['used_for'] or 'GBP'}'" if r['status'] == 'used' else ""
-        imported = f"imported {pretty_date(r['imported_at'])}"
-        print(f"  #{r['id']:>4}  {r['filename']}  ({imported}){used_info}")
-
-
-# ============================================================
-# MARK USED
-# ============================================================
-def cmd_mark_used(photo_id, used_for=None):
-    conn = get_db()
-    row = conn.execute("SELECT * FROM photos WHERE id = ?", (photo_id,)).fetchone()
-    if not row:
-        print(f"Photo #{photo_id} not found.")
-        conn.close()
-        return
-    if row['status'] == 'used':
-        print(f"Photo #{photo_id} already marked as used on {row['used_at']}.")
-        conn.close()
-        return
-
-    if not used_for:
-        used_for = input("What did you use this for? (e.g. 'GBP post 2026-04-16 mosquito hixson'): ").strip()
-        if not used_for:
-            used_for = f"GBP {datetime.now().strftime('%Y-%m-%d')}"
-
-    src = Path(row['current_path'])
-    dst_dir = USED / row['brand'] / row['city'] / row['neighborhood']
-    dst_dir.mkdir(parents=True, exist_ok=True)
-    dst = dst_dir / row['filename']
-    if dst.exists():
-        dst = dst_dir / ensure_unique_filename(dst_dir, row['filename'])
-
-    if src.exists():
-        shutil.move(str(src), str(dst))
-    else:
-        print(f"Warning: file not found at {src}, updating database only.")
-
-    conn.execute("""
-        UPDATE photos
-        SET status = 'used', used_at = ?, used_for = ?, current_path = ?
-        WHERE id = ?
-    """, (datetime.now().isoformat(), used_for, str(dst), photo_id))
-    conn.commit()
-    conn.close()
-
-    print(f"✓ #{photo_id} marked used. Moved to: {dst.relative_to(LIBRARY_ROOT)}")
-
-
-# ============================================================
-# STATS (now with last upload dates)
-# ============================================================
-def cmd_stats():
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT brand, city, neighborhood, status,
-               COUNT(*) as count, MAX(imported_at) as last_import
-        FROM photos
-        GROUP BY brand, city, neighborhood, status
-        ORDER BY brand, city, neighborhood, status
-    """).fetchall()
-    conn.close()
-
-    if not rows:
-        print("No photos in database yet. Import some first.")
-        return
-
-    print("\nINVENTORY BY LOCATION")
-    print("=" * 100)
-    print(f"{'Brand':<18} {'City':<18} {'Neighborhood':<20} {'Unused':>7} {'Used':>6}  {'Last upload':<14} {'Flags'}")
-    print("-" * 100)
-
-    grid = {}
-    for r in rows:
-        key = (r['brand'], r['city'], r['neighborhood'])
-        if key not in grid:
-            grid[key] = {'unused': 0, 'used': 0, 'last_import': None}
-        grid[key][r['status']] = r['count']
-        # Track most recent import across both statuses
-        if r['last_import']:
-            current = grid[key]['last_import']
-            if not current or r['last_import'] > current:
-                grid[key]['last_import'] = r['last_import']
-
-    totals = {'unused': 0, 'used': 0}
-    for (brand, city, nbhd), counts in sorted(grid.items()):
-        unused = counts.get('unused', 0)
-        used = counts.get('used', 0)
-        totals['unused'] += unused
-        totals['used'] += used
-
-        last = counts['last_import']
-        last_str = pretty_date(last)
-        days = days_since(last)
-
-        flags = []
-        if unused < 3:
-            flags.append("low-stock")
-        if days is not None and days > 60:
-            flags.append(f"stale-{days}d")
-        flag_str = ", ".join(flags)
-
-        print(f"{brand:<18} {city:<18} {nbhd:<20} {unused:>7} {used:>6}  {last_str:<14} {flag_str}")
-
-    print("-" * 100)
-    print(f"{'TOTAL':<58} {totals['unused']:>7} {totals['used']:>6}")
-    print("\nFlags: 'low-stock' = fewer than 3 unused photos.")
-    print("       'stale-Nd'  = no new photos uploaded in N days (N > 60).")
-
-
-# ============================================================
-# LAST UPLOADS (sorted by staleness so worst offenders float up)
-# ============================================================
-def cmd_last_uploads():
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT brand, city, neighborhood, MAX(imported_at) as last_import, COUNT(*) as total
-        FROM photos
-        GROUP BY brand, city, neighborhood
-        ORDER BY last_import ASC
-    """).fetchall()
-    conn.close()
-
-    if not rows:
-        print("No photos in database yet.")
-        return
-
-    print("\nLAST UPLOAD BY LOCATION (oldest first)")
-    print("=" * 90)
-    print(f"{'Days ago':>9}  {'Last upload':<14} {'Brand':<18} {'City':<18} {'Neighborhood':<20} {'Total':>6}")
-    print("-" * 90)
-    for r in rows:
-        days = days_since(r['last_import'])
-        days_str = f"{days}" if days is not None else "?"
-        print(f"{days_str:>9}  {pretty_date(r['last_import']):<14} {r['brand']:<18} {r['city']:<18} {r['neighborhood']:<20} {r['total']:>6}")
-
-    print("\nOldest at top = pockets that need fresh tech photos next.")
-
-
-# ============================================================
-# REASSIGN (fix a mislabeled photo)
-# ============================================================
-def cmd_reassign(photo_id):
-    conn = get_db()
-    row = conn.execute("SELECT * FROM photos WHERE id = ?", (photo_id,)).fetchone()
-    if not row:
-        print(f"Photo #{photo_id} not found.")
-        conn.close()
-        return
-
-    print(f"\nReassigning photo #{photo_id}")
-    print(f"  Current filename: {row['filename']}")
-    print(f"  Currently tagged: {row['brand']} / {row['city']} / {row['neighborhood']}")
-    print(f"  Service keyword:  {row['service_keyword']}")
-    print(f"  Status:           {row['status']}")
-
-    print("\nPick new tags (or Ctrl+C to cancel):")
-    new_brand = pick_from_list("New brand:", list(BRANDS.keys()))
-    if not new_brand:
-        conn.close()
-        return
-    new_city = pick_from_list("New city:", list(BRANDS[new_brand].keys()))
-    if not new_city:
-        conn.close()
-        return
-    new_nbhd = pick_from_list("New neighborhood:", BRANDS[new_brand][new_city])
-    if not new_nbhd:
-        conn.close()
-        return
-
-    # Give option to update service keyword too, since it often differs by brand
-    print(f"\nKeep current service keyword '{row['service_keyword']}' or pick a new one?")
-    services = SERVICE_KEYWORDS.get(new_brand, [])
-    service = pick_from_list("Service keyword:", [f"[keep '{row['service_keyword']}']"] + services + ["[custom]"])
-    if service and service.startswith("[keep"):
-        new_service = row['service_keyword']
-    elif service == "[custom]":
-        new_service = slugify(input("Enter custom service keyword: "))
-    elif service:
-        new_service = service
-    else:
-        new_service = row['service_keyword']
-
-    # Build new filename and destination
-    src = Path(row['current_path'])
-    ext = src.suffix if src.suffix else ".jpg"
-    new_filename = build_filename(new_brand, new_city, new_nbhd, new_service, ext)
-
-    # Destination folder depends on current status (unused vs used)
-    root = USED if row['status'] == 'used' else UNUSED
-    dst_dir = root / new_brand / new_city / new_nbhd
-    dst_dir.mkdir(parents=True, exist_ok=True)
-    new_filename = ensure_unique_filename(dst_dir, new_filename)
-    dst_path = dst_dir / new_filename
-
-    # Confirm
-    print(f"\nAbout to reassign:")
-    print(f"  From: {row['brand']}/{row['city']}/{row['neighborhood']}/{row['filename']}")
-    print(f"  To:   {new_brand}/{new_city}/{new_nbhd}/{new_filename}")
-    confirm = input("Proceed? (y/n): ").strip().lower()
-    if confirm != "y":
-        print("Cancelled.")
-        conn.close()
-        return
-
-    # Move the file
-    if src.exists():
-        shutil.move(str(src), str(dst_path))
-    else:
-        print(f"Warning: source file not found at {src}. Updating database only.")
-
-    # Update DB
-    conn.execute("""
-        UPDATE photos
-        SET brand = ?, city = ?, neighborhood = ?, service_keyword = ?,
-            filename = ?, current_path = ?
-        WHERE id = ?
-    """, (new_brand, new_city, new_nbhd, new_service,
-          new_filename, str(dst_path), photo_id))
-    conn.commit()
-    conn.close()
-    print(f"✓ Reassigned. New location: {dst_path.relative_to(LIBRARY_ROOT)}")
-
-
-# ============================================================
-# DUPLICATE SCAN
-# ============================================================
-def cmd_dupes():
-    """Scan library for duplicate photos by content hash."""
-    conn = get_db()
-
-    # First backfill any missing hashes
-    rows_without_hash = conn.execute(
-        "SELECT id, current_path FROM photos WHERE file_hash IS NULL OR file_hash = ''"
-    ).fetchall()
-
-    if rows_without_hash:
-        print(f"Backfilling hashes for {len(rows_without_hash)} older photos (one-time)...")
-        for r in rows_without_hash:
-            p = Path(r['current_path'])
-            if p.exists():
-                try:
-                    h = hash_file(p)
-                    conn.execute("UPDATE photos SET file_hash = ? WHERE id = ?", (h, r['id']))
-                except OSError as e:
-                    print(f"  Could not hash #{r['id']}: {e}")
-            else:
-                print(f"  File missing for #{r['id']}: {p}")
-        conn.commit()
-        print("Backfill done.\n")
-
-    # Find duplicates
-    dupe_groups = conn.execute("""
-        SELECT file_hash, COUNT(*) as cnt
-        FROM photos
-        WHERE file_hash IS NOT NULL AND file_hash != ''
-        GROUP BY file_hash
-        HAVING cnt > 1
-        ORDER BY cnt DESC
-    """).fetchall()
-
-    if not dupe_groups:
-        print("No duplicate photos found. Library is clean.")
-        conn.close()
-        return
-
-    print(f"\nFound {len(dupe_groups)} set(s) of duplicate photos:")
-    print("=" * 80)
-
-    for gi, grp in enumerate(dupe_groups, 1):
-        members = conn.execute(
-            "SELECT id, filename, brand, city, neighborhood, status, imported_at "
-            "FROM photos WHERE file_hash = ? ORDER BY imported_at",
-            (grp['file_hash'],)
-        ).fetchall()
-        print(f"\nDuplicate set {gi} ({grp['cnt']} copies, hash {grp['file_hash'][:10]}...):")
-        for m in members:
-            print(f"  #{m['id']:>4}  [{m['status']}]  {m['brand']}/{m['city']}/{m['neighborhood']}/{m['filename']}")
-            print(f"          imported {pretty_date(m['imported_at'])}")
-
-    print("\n" + "=" * 80)
-    print("To remove a duplicate: use 'delete' command (or delete file + row manually).")
-    print("Suggested strategy: keep the oldest 'used' copy (proof of history), delete newer 'unused' copies.")
-
-    # Offer to interactively clean up
-    print("\nWant to interactively clean up? (y/n)")
-    if input("> ").strip().lower() == "y":
-        for gi, grp in enumerate(dupe_groups, 1):
-            members = conn.execute(
-                "SELECT id, filename, brand, city, neighborhood, status, imported_at, current_path "
-                "FROM photos WHERE file_hash = ? ORDER BY imported_at",
-                (grp['file_hash'],)
-            ).fetchall()
-            print(f"\nSet {gi}:")
-            for i, m in enumerate(members, 1):
-                print(f"  {i}. #{m['id']} [{m['status']}] {m['filename']} ({m['brand']}/{m['city']}/{m['neighborhood']})")
-            print(f"  0. Skip this set (leave all copies)")
-            print(f"  Enter number(s) to DELETE (comma separated, e.g. '2,3'):")
-            picks = input("> ").strip()
-            if picks == "0" or not picks:
-                continue
-            try:
-                to_delete = [int(x.strip()) for x in picks.split(",")]
-                for pick in to_delete:
-                    if 1 <= pick <= len(members):
-                        m = members[pick - 1]
-                        p = Path(m['current_path'])
-                        if p.exists():
-                            p.unlink()
-                        conn.execute("DELETE FROM photos WHERE id = ?", (m['id'],))
-                        print(f"  Deleted #{m['id']}")
-                conn.commit()
-            except ValueError:
-                print("  Invalid input, skipping this set.")
-
-    conn.close()
-
-
-# ============================================================
-# SEARCH
-# ============================================================
-def cmd_search(term):
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT * FROM photos
-        WHERE filename LIKE ? OR brand LIKE ? OR city LIKE ?
-           OR neighborhood LIKE ? OR service_keyword LIKE ? OR used_for LIKE ?
-        ORDER BY status, brand, city, neighborhood
-    """, [f"%{term}%"] * 6).fetchall()
-    conn.close()
-
-    if not rows:
-        print(f"No photos match '{term}'.")
-        return
-
-    print(f"\nSEARCH RESULTS for '{term}' ({len(rows)} matches)")
-    print("=" * 80)
-    for r in rows:
-        status_tag = "[USED]  " if r['status'] == 'used' else "[UNUSED]"
-        print(f"{status_tag} #{r['id']:>4} {r['filename']}")
-        print(f"         {r['brand']} / {r['city']} / {r['neighborhood']}  (imported {pretty_date(r['imported_at'])})")
-
-
-# ============================================================
-# INTERACTIVE MENU
-# ============================================================
-def cmd_menu():
-    while True:
-        print("\n" + "=" * 50)
-        print("PHOTO SORTER")
-        print("=" * 50)
-        print("1. Import new photos from _inbox/")
-        print("2. List UNUSED photos (filterable)")
-        print("3. Mark photo as used")
-        print("4. Inventory stats (with last upload dates)")
-        print("5. Search photos")
-        print("6. List USED photos (filterable)")
-        print("7. Reassign a photo (fix brand/city/neighborhood)")
-        print("8. Scan library for duplicate photos")
-        print("9. Last upload dates by location")
-        print("0. Quit")
-        choice = input("> ").strip()
-
-        if choice == "1":
-            cmd_import()
-        elif choice == "2":
-            _filter_and_list("unused")
-        elif choice == "3":
-            pid = input("Photo ID to mark used: ").strip()
-            if pid.isdigit():
-                cmd_mark_used(int(pid))
-        elif choice == "4":
-            cmd_stats()
-        elif choice == "5":
-            term = input("Search term: ").strip()
-            if term:
-                cmd_search(term)
-        elif choice == "6":
-            _filter_and_list("used")
-        elif choice == "7":
-            pid = input("Photo ID to reassign: ").strip()
-            if pid.isdigit():
-                cmd_reassign(int(pid))
-        elif choice == "8":
-            cmd_dupes()
-        elif choice == "9":
-            cmd_last_uploads()
-        elif choice == "0":
-            print("Done.")
-            break
-        else:
-            print("Invalid choice.")
-
-
-def _filter_and_list(status):
-    print("\nFilter (or press enter to skip):")
-    brand = pick_from_list("Brand (or skip):", list(BRANDS.keys()), allow_skip=True)
-    city = None
-    nbhd = None
-    if brand:
-        city = pick_from_list("City (or skip):", list(BRANDS[brand].keys()), allow_skip=True)
-        if city:
-            nbhd = pick_from_list("Neighborhood (or skip):", BRANDS[brand][city], allow_skip=True)
-    cmd_list(brand=brand, city=city, neighborhood=nbhd, status=status)
-
-
-# ============================================================
-# CLI ENTRY
-# ============================================================
-def main():
-    if len(sys.argv) < 2:
-        print(__doc__)
-        return
-
-    cmd = sys.argv[1]
-    args = sys.argv[2:]
-
-    if cmd == "setup":
-        cmd_setup()
-    elif cmd == "import":
-        cmd_import()
-    elif cmd == "list":
-        cmd_list()
-    elif cmd == "used":
-        if not args or not args[0].isdigit():
-            print("Usage: photo_sorter.py used <photo_id>")
-            return
-        cmd_mark_used(int(args[0]))
-    elif cmd == "stats":
-        cmd_stats()
-    elif cmd == "search":
-        if not args:
-            print("Usage: photo_sorter.py search <term>")
-            return
-        cmd_search(" ".join(args))
-    elif cmd == "reassign":
-        if not args or not args[0].isdigit():
-            print("Usage: photo_sorter.py reassign <photo_id>")
-            return
-        cmd_reassign(int(args[0]))
-    elif cmd == "dupes":
-        cmd_dupes()
-    elif cmd == "last-uploads":
-        cmd_last_uploads()
-    elif cmd == "menu":
-        cmd_menu()
-    else:
-        print(f"Unknown command: {cmd}")
-        print(__doc__)
-
-
-if __name__ == "__main__":
-    main()
+async function saveToDrive(){
+  if(!oauthToken)return; // not signed in yet, local cache is fine
+  try{
+    const folderId=await getOrCreateFolder();
+    const data=JSON.stringify(getStateData());
+    const blob=new Blob([data],{type:'application/json'});
+    if(driveDataFileId){
+      // Update existing file
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveDataFileId}?uploadType=media`,{
+        method:'PATCH',
+        headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+        body:blob
+      });
+    }else{
+      // Find or create the data file
+      const existing=await findDataFile(folderId);
+      if(existing){
+        driveDataFileId=existing;
+        localStorage.setItem(DATA_FILE_KEY,driveDataFileId);
+        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveDataFileId}?uploadType=media`,{
+          method:'PATCH',
+          headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+          body:blob
+        });
+      }else{
+        const form=new FormData();
+        form.append('metadata',new Blob([JSON.stringify({name:DRIVE_DATA_FILENAME,parents:[folderId]})],{type:'application/json'}));
+        form.append('file',blob);
+        const resp=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id&supportsAllDrives=true',{
+          method:'POST',headers:{Authorization:`Bearer ${oauthToken}`},body:form
+        });
+        const created=await resp.json();
+        driveDataFileId=created.id;
+        localStorage.setItem(DATA_FILE_KEY,driveDataFileId);
+      }
+    }
+  }catch(e){console.error('Drive save failed:',e);}
+}
+
+async function findDataFile(folderId){
+  try{
+    const r=await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_DATA_FILENAME}' and '${folderId}' in parents and trashed=false&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+      {headers:{Authorization:`Bearer ${oauthToken}`}}
+    );
+    const d=await r.json();
+    return d.files&&d.files.length>0?d.files[0].id:null;
+  }catch(e){return null;}
+}
+
+// Load from Drive if signed in, fall back to localStorage cache
+async function load(){
+  // Show local cache immediately so map isn't blank
+  try{
+    const r=localStorage.getItem(STORAGE_KEY);
+    const rp=localStorage.getItem(PENDING_KEY);
+    const rr=localStorage.getItem('gbp_tech_review');
+    if(r){photos=JSON.parse(r);photos.forEach(p=>addMarker(p));}
+    if(rp){pending=JSON.parse(rp);renderPendingPanel();}
+    if(rr){techReview=JSON.parse(rr);}
+  }catch(e){}
+  updateStats();checkNoPhotos();
+  // Then load from Drive once signed in (called after auth)
+}
+
+async function loadFromDrive(){
+  try{
+    const folderId=await getOrCreateFolder();
+    // Check cached file ID first
+    if(!driveDataFileId){
+      const cached=localStorage.getItem(DATA_FILE_KEY);
+      if(cached)driveDataFileId=cached;
+      else driveDataFileId=await findDataFile(folderId);
+      if(driveDataFileId)localStorage.setItem(DATA_FILE_KEY,driveDataFileId);
+    }
+    if(!driveDataFileId){
+      // No data file in Drive yet — push local data up if we have any
+      if(photos.length>0||pending.length>0||techReview.length>0){
+        await saveToDrive();
+        toast('Map data saved to Drive.');
+      }
+      return;
+    }
+    const resp=await fetch(`https://www.googleapis.com/drive/v3/files/${driveDataFileId}?alt=media`,{
+      headers:{Authorization:`Bearer ${oauthToken}`}
+    });
+    if(!resp.ok)return;
+    const data=await resp.json();
+    if(!data.photos)return;
+
+    // MERGE — never overwrite, always combine
+    // Drive is the base. Any local photo not in Drive gets added. 
+    // For photos in both, Drive version of 'used' wins (marketer's decisions are authoritative).
+    const drivePhotos = (data.photos||[]).filter(p=>!deletedIds.has(p.id)&&!deletedIds.has(p.driveId));
+    const drivePending = data.pending || [];
+    const driveIds = new Set(drivePhotos.map(p=>p.id));
+    const driveDriveFileIds = new Set(drivePhotos.map(p=>p.driveId).filter(Boolean));
+
+    // Local photos not in Drive (added since last sync) — keep them
+    const localOnly = photos.filter(p => !driveIds.has(p.id) && !driveDriveFileIds.has(p.driveId));
+    // Don't restore pending items that have already been pinned (exist in photos or localOnly)
+    const allPinnedIds = new Set([...drivePhotos,...localOnly].map(p=>p.id));
+    const allPinnedDriveIds = new Set([...drivePhotos,...localOnly].map(p=>p.driveId).filter(Boolean));
+    const localPendingOnly = pending.filter(p =>
+      !drivePending.find(dp=>dp.id===p.id) &&
+      !allPinnedIds.has(p.id) &&
+      !allPinnedDriveIds.has(p.driveId)
+    );
+    // Also filter Drive pending to exclude anything now pinned, in techReview, or explicitly deleted
+    const allTechReviewIds = new Set(techReview.map(p=>p.id));
+    const allTechReviewDriveIds = new Set(techReview.map(p=>p.driveId).filter(Boolean));
+    const filteredDrivePending = drivePending.filter(p =>
+      !allPinnedIds.has(p.id) &&
+      !allPinnedDriveIds.has(p.driveId) &&
+      !allTechReviewIds.has(p.id) &&
+      !allTechReviewDriveIds.has(p.driveId) &&
+      !deletedIds.has(p.id) &&
+      !deletedIds.has(p.driveId)
+    );
+
+    // Load deletedIds from Drive and merge with local
+    const driveDeletedIds = new Set(data.deletedIds||[]);
+    driveDeletedIds.forEach(id=>deletedIds.add(id));
+
+    // Rebuild from merged set
+    const driveTechReview = (data.techReview||[]).filter(p=>
+      !deletedIds.has(p.id)&&!deletedIds.has(p.driveId)&&
+      !allPinnedIds.has(p.id)&&!allPinnedDriveIds.has(p.driveId)
+    );
+    const localTechReviewOnly = techReview.filter(p =>
+      !driveTechReview.find(dp=>dp.id===p.id)&&
+      !deletedIds.has(p.id)&&!deletedIds.has(p.driveId)&&
+      !allPinnedIds.has(p.id)&&!allPinnedDriveIds.has(p.driveId)
+    );
+    Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
+    locMarkers={};markers={};
+    photos = [...drivePhotos, ...localOnly];
+    pending = [...filteredDrivePending, ...localPendingOnly];
+    techReview = [...driveTechReview, ...localTechReviewOnly];
+    photos.forEach(p=>addMarker(p));
+
+    // If we had local-only items OR deletedIds filtered items out, push merged state back to Drive immediately
+    const driveHadDeletedItems = (data.pending||[]).length > filteredDrivePending.length ||
+      (data.photos||[]).length > drivePhotos.length ||
+      (data.techReview||[]).length > driveTechReview.length;
+    if(localOnly.length > 0 || localPendingOnly.length > 0 || localTechReviewOnly.length > 0 || driveHadDeletedItems){
+      await saveToDrive();
+    }
+
+    // Update local cache
+    try{
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(photos));
+      localStorage.setItem(PENDING_KEY,JSON.stringify(pending));
+      localStorage.setItem('gbp_tech_review',JSON.stringify(techReview));
+    }catch(e){}
+    renderPendingPanel();updateStats();checkNoPhotos();updateReviewBadge();
+    // Show banner for most recent tech review item if any arrived
+    if(techReview.length>0){
+      const newest=[...techReview].sort((a,b)=>new Date(b.submittedAt||0)-new Date(a.submittedAt||0))[0];
+      if(newest)showLatestBanner(newest);
+    }
+    // Scan Pending Review folder for orphaned files (uploaded but review record missing)
+    scanPendingReviewFolder();
+    if(photos.length>0){
+      const bounds=L.latLngBounds(photos.map(p=>[p.lat,p.lng]));
+      map.fitBounds(bounds,{padding:[60,60]});
+    }
+  }catch(e){console.error('Drive load failed:',e);}
+}
+
+function guessBrand(name){
+  const n=name.toLowerCase();
+  if(n.includes('mosquito'))return'mosquito';
+  if(n.includes('lawn'))return'lawn';
+  if(n.includes('new-age')||n.includes('newage')||n.includes('lights')||n.includes('jellyfish')||n.includes('nag'))return'newage';
+  // Fall back to active filter brand if set, otherwise mosquito
+  return(activeBrand&&activeBrand!=='all')?activeBrand:'mosquito';
+}
+
+const brandColors={mosquito:'#185FA5',lawn:'#3B6D11',newage:'#854F0B'};
+const brandLabels={mosquito:'Mosquito Squad',lawn:'Lawn Squad',newage:'New Age Lights'};
+
+function locKey(p){return `${parseFloat(p.lat).toFixed(5)},${parseFloat(p.lng).toFixed(5)}`;}
+
+function makeIcon(photosAtLoc,brand){
+  // Only count photos that are visible under the current filter
+  const visiblePhotos=photosAtLoc.filter(p=>
+    (activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used)
+  );
+  const allUsed=visiblePhotos.length>0&&visiblePhotos.every(p=>p.used);
+  const count=visiblePhotos.length;
+  const color=allUsed?'#aaa':(brandColors[brand]||'#444');
+  const badge=count>1?`<div style="position:absolute;top:-4px;right:-4px;background:#E24B4A;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;font-family:sans-serif;border:1.5px solid #fff;">${count}</div>`:'';
+  const svg=`<div style="position:relative;display:inline-block;"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36"><path d="M14 0C6.27 0 0 6.27 0 14c0 9.33 14 22 14 22S28 23.33 28 14C28 6.27 21.73 0 14 0z" fill="${color}" opacity="${allUsed?0.45:1}"/><circle cx="14" cy="14" r="6" fill="white" opacity="0.9"/></svg>${badge}</div>`;
+  return L.divIcon({html:svg,className:'',iconSize:[28,36],iconAnchor:[14,36],popupAnchor:[0,-38]});
+}
+
+function buildPhotoCard(p){
+  const color=brandColors[p.brand]||'#444';
+  const label=brandLabels[p.brand]||p.brand;
+  let html=`<div class="photo-card">`;
+  if(p.thumb)html+=`<img class="popup-img" src="${p.thumb}" alt="${p.name}" onclick="openLightbox('${p.id}')">`;
+  html+=`<div class="popup-name">${p.name}</div>`;
+  html+=`<div class="popup-badges"><span class="popup-brand-badge" style="background:${color}">${label}</span>`;
+  if(p.manual)html+=`<span class="popup-source-tag">manual pin</span>`;
+  html+=`</div>`;
+  // Description
+  if(p.desc){
+    html+=`<div class="popup-desc">${p.desc} <span style="font-size:10px;color:#9b9b97;cursor:pointer;text-decoration:underline" onclick="editDesc('${p.id}')">edit</span></div>`;
+  }else if(!isTechMode){
+    html+=`<span class="popup-desc-empty" onclick="editDesc('${p.id}')">+ Add description</span>`;
+  }
+  html+=`<div id="desc-edit-${p.id}" style="display:none">
+    <textarea class="popup-desc-edit" id="desc-input-${p.id}" rows="2" placeholder="What's in this photo?">${p.desc||''}</textarea>
+    <button class="popup-desc-save" onclick="saveDesc('${p.id}')">Save</button>
+  </div>`;
+  if(!isTechMode&&!isViewMode){
+    if(!p.used){
+      html+=`<div class="popup-actions"><button class="btn-used" onclick="markUsed('${p.id}')">Mark used</button><button class="btn-remove" onclick="removePhoto('${p.id}')">Remove</button></div>`;
+    }else{
+      html+=`<button class="btn-undo" onclick="undoUsed('${p.id}')">Undo — mark unused</button>`;
+    }
+  }
+  if(p.driveId){
+    html+=`<button class="btn-download" onclick="downloadDriveFile('${p.driveId}','${p.name}')"><i class="ti ti-download" style="font-size:13px"></i> Download full resolution</button>`;
+  }
+  html+=`</div>`;return html;
+}
+
+function buildPopup(photosAtLoc){
+  // Only show photos matching current filter in the popup
+  const visible=photosAtLoc.filter(p=>
+    (activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used)
+  );
+  // Fall back to all photos if filter produces nothing (shouldn't happen but safety net)
+  const toShow=visible.length>0?visible:photosAtLoc;
+  const lat=parseFloat(toShow[0].lat).toFixed(5),lng=parseFloat(toShow[0].lng).toFixed(5);
+  const total=toShow.length;
+  let html=`<div class="popup-wrap">`;
+  if(total>1){
+    html+=`<div class="popup-location-header">${total} photo${total!==1?'s':''} at this location<div class="popup-coords">${lat}, ${lng}</div></div>`;
+    html+=`<div class="photo-card-scroll">`;
+    toShow.forEach((p,i)=>{
+      if(i>0)html+=`<div class="photo-card-divider"></div>`;
+      html+=buildPhotoCard(p);
+    });
+    html+=`</div>`;
+  }else{
+    html+=`<div class="popup-coords">${lat}, ${lng}</div>`;
+    html+=buildPhotoCard(toShow[0]);
+  }
+  html+=`</div>`;return html;
+}
+
+window.downloadDriveFile=function(fileId,name){
+  if(!oauthToken){toast('Reconnect Drive first — click Upload to Drive or Add from Drive.');return;}
+  showLoading('Downloading from Drive...');
+  fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,{
+    headers:{Authorization:`Bearer ${oauthToken}`}
+  }).then(r=>{if(!r.ok)throw new Error();return r.blob();})
+  .then(blob=>{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=name;a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);hideLoading();
+  }).catch(()=>{hideLoading();toast('Download failed — try reconnecting Drive.');});
+};
+
+window.openLightbox=function(id){
+  const p=photos.find(x=>x.id===id);if(!p||!p.thumb)return;
+  document.getElementById('lightbox-img').src=p.thumb;
+  document.getElementById('lightbox').style.display='flex';
+};
+window.closeLightbox=function(){document.getElementById('lightbox').style.display='none';};
+
+function showAccessBanner(){
+  // Don't show access banner in view mode
+  if(isViewMode)return;
+  document.getElementById('access-screen-request').style.display='flex';
+  document.getElementById('access-screen-sent').style.display='none';
+  document.getElementById('access-banner').style.display='flex';
+}
+function hideAccessBanner(){
+  document.getElementById('access-banner').style.display='none';
+}
+
+window.submitAccessRequest=function(e){
+  e.preventDefault();
+  const name=document.getElementById('req-name').value.trim();
+  const email=document.getElementById('req-email').value.trim();
+  if(!name||!email){
+    alert('Please enter your name and Google account email.');
+    return;
+  }
+  // Build the mailto with all info + direct link to Google Cloud test users
+  const cloudLink='https://console.cloud.google.com/auth/audience?project=gbp-phoyo';
+  const driveLink='https://drive.google.com/drive/folders/';
+  const subject=encodeURIComponent('GBP Photo Map — Access Request from '+name);
+  const body=encodeURIComponent(
+    'New access request for the GBP Photo Inventory Map:\n\n' +
+    'Name: '+name+'\n' +
+    'Google account email: '+email+'\n\n' +
+    'TO APPROVE:\n' +
+    '1. Add their email as a test user here:\n' +
+    '   '+cloudLink+'\n\n' +
+    '2. Share the GBP Photo Inventory folder in Drive with: '+email+'\n\n' +
+    '3. Reply to this email to let them know they have access.\n'
+  );
+  window.location.href='mailto:eloveland@mosquitosquadplus.com?subject='+subject+'&body='+body;
+  // Show confirmation screen
+  setTimeout(()=>{
+    document.getElementById('access-screen-request').style.display='none';
+    document.getElementById('access-screen-sent').style.display='flex';
+  },500);
+};
+
+// Location-grouped marker system
+// locMarkers: keyed by locKey, one marker per unique location
+let locMarkers={};
+
+function getPhotosAtLoc(key){
+  return photos.filter(p=>locKey(p)===key);
+}
+
+function isLocVisible(key){
+  const ps=getPhotosAtLoc(key);
+  return ps.some(p=>(activeBrand==='all'||activeBrand===p.brand)&&(showUsed||!p.used));
+}
+
+function getPrimaryBrand(ps){
+  // If filtered to a specific brand, use that brand's color
+  if(activeBrand!=='all'){
+    const match=ps.find(p=>p.brand===activeBrand&&!p.used);
+    const matchUsed=ps.find(p=>p.brand===activeBrand);
+    if(match||matchUsed)return activeBrand;
+  }
+  // Otherwise use brand of first non-used, or first overall
+  const active=ps.find(p=>!p.used);
+  return(active||ps[0]).brand;
+}
+
+function rebuildLocMarker(key){
+  const ps=getPhotosAtLoc(key);
+  if(!ps.length){
+    if(locMarkers[key]){map.removeLayer(locMarkers[key]);delete locMarkers[key];}
+    return;
+  }
+  const visible=isLocVisible(key);
+  const brand=getPrimaryBrand(ps);
+  if(locMarkers[key]){
+    locMarkers[key].setIcon(makeIcon(ps,brand));
+    locMarkers[key].setPopupContent(buildPopup(ps));
+    if(visible&&!map.hasLayer(locMarkers[key]))locMarkers[key].addTo(map);
+    if(!visible&&map.hasLayer(locMarkers[key]))map.removeLayer(locMarkers[key]);
+  }else{
+    const marker=L.marker([ps[0].lat,ps[0].lng],{icon:makeIcon(ps,brand)})
+      .bindPopup(buildPopup(ps),{maxWidth:280,minWidth:250});
+    if(visible)marker.addTo(map);
+    locMarkers[key]=marker;
+  }
+}
+
+function addMarker(p){
+  // store on markers for legacy lookups, but visual is handled by locMarkers
+  markers[p.id]=true;
+  rebuildLocMarker(locKey(p));
+}
+function refreshMarker(p){
+  rebuildLocMarker(locKey(p));
+}
+function applyFilters(){
+  const keys=new Set(photos.map(p=>locKey(p)));
+  keys.forEach(k=>rebuildLocMarker(k));
+  updateStats();
+}
+function updateStats(){
+  const unused=photos.filter(p=>!p.used).length,used=photos.filter(p=>p.used).length;
+  document.getElementById('stats').textContent=`${unused} unused · ${used} used`;
+  checkNoPhotos();
+}
+function checkNoPhotos(){
+  document.getElementById('no-photos').style.display=(photos.length===0&&pending.length===0)?'block':'none';
+}
+
+window.markUsed=function(id){
+  const p=photos.find(x=>x.id===id);if(!p)return;
+  const key=locKey(p);p.used=true;save();rebuildLocMarker(key);updateStats();map.closePopup();
+};
+window.undoUsed=function(id){
+  const p=photos.find(x=>x.id===id);if(!p)return;
+  const key=locKey(p);p.used=false;save();rebuildLocMarker(key);updateStats();map.closePopup();
+};
+window.removePhoto=async function(id){
+  const idx=photos.findIndex(x=>x.id===id);if(idx===-1)return;
+  const p=photos[idx];
+  if(!confirm('Remove this photo? It will also be deleted from Google Drive.'))return;
+  const key=locKey(p);
+  // Track as deleted so sync never restores it
+  deletedIds.add(p.id);
+  if(p.driveId)deletedIds.add(p.driveId);
+  // Delete file from Drive
+  if(p.driveId&&oauthToken){
+    try{
+      const delResp=await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
+        method:'DELETE',headers:{Authorization:`Bearer ${oauthToken}`}
+      });
+      if(!delResp.ok&&delResp.status!==204){
+        await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
+          method:'PATCH',headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+          body:JSON.stringify({trashed:true})
+        });
+      }
+    }catch(e){console.error('Drive delete failed:',e);}
+  }
+  delete markers[id];
+  photos.splice(idx,1);
+  rebuildLocMarker(key);
+  // Save to localStorage immediately
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(photos.map(ph=>({id:ph.id,name:ph.name,lat:ph.lat,lng:ph.lng,brand:ph.brand,used:ph.used,thumb:ph.thumb,hash:ph.hash||null,desc:ph.desc||null,manual:ph.manual||false,driveId:ph.driveId||null}))));}catch(e){}
+  save();
+  // Await Drive save so sync can't overwrite before it completes
+  if(oauthToken)await saveToDrive();
+  updateStats();map.closePopup();
+  toast('Photo removed from map and Drive.');
+};
+
+// Auth — shared between upload and picker
+function ensureAuth(callback){
+  if(oauthToken){callback();return;}
+  function doAuth(){
+    const client=google.accounts.oauth2.initTokenClient({
+      client_id:config.clientId,
+      scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+      callback:(resp)=>{
+        if(resp.error){
+          if(resp.error==='access_denied'||resp.error==='interaction_required'||resp.error==='login_required'){
+            showAccessBanner();
+          }else{
+            toast('Drive sign-in failed: '+resp.error);
+          }
+          return;
+        }
+        oauthToken=resp.access_token;
+        hideAccessBanner();
+        // Sync from Drive on every sign-in so all devices stay current
+        loadFromDrive().then(()=>{
+          callback();
+          startAutoSync();
+        });
+      }
+    });
+    client.requestAccessToken({prompt:''});
+  }
+  if(!window.google||!window.google.accounts){
+    const s=document.createElement('script');
+    s.src='https://accounts.google.com/gsi/client';
+    s.onload=()=>doAuth();
+    document.body.appendChild(s);
+    if(!window.gapi)loadPickerApi();
+  }else{
+    doAuth();
+  }
+}
+
+function loadPickerApi(){
+  if(!window.gapi){
+    const s=document.createElement('script');
+    s.src='https://apis.google.com/js/api.js';
+    s.onload=()=>gapi.load('picker',()=>{pickerApiLoaded=true;});
+    document.body.appendChild(s);
+  }
+}
+
+// Drive folder management
+async function getOrCreateFolder(){
+  driveFolderId=HARDCODED_FOLDER_ID;
+  return driveFolderId;
+}
+
+async function getOrCreatePendingReviewFolder(){
+  if(pendingReviewFolderId)return pendingReviewFolderId;
+  // Check cache
+  try{const c=localStorage.getItem(PENDING_REVIEW_KEY);if(c){pendingReviewFolderId=c;return c;}}catch(e){}
+  // Search for existing folder
+  const search=await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${PENDING_REVIEW_FOLDER_NAME}' and '${HARDCODED_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+    {headers:{Authorization:`Bearer ${oauthToken}`}}
+  );
+  const sd=await search.json();
+  if(sd.files&&sd.files.length>0){
+    pendingReviewFolderId=sd.files[0].id;
+    localStorage.setItem(PENDING_REVIEW_KEY,pendingReviewFolderId);
+    return pendingReviewFolderId;
+  }
+  // Create it
+  const create=await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true',{
+    method:'POST',
+    headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+    body:JSON.stringify({name:PENDING_REVIEW_FOLDER_NAME,mimeType:'application/vnd.google-apps.folder',parents:[HARDCODED_FOLDER_ID]})
+  });
+  const created=await create.json();
+  pendingReviewFolderId=created.id;
+  localStorage.setItem(PENDING_REVIEW_KEY,pendingReviewFolderId);
+  return pendingReviewFolderId;
+}
+
+async function getOrCreateDeniedFolder(){
+  if(deniedFolderId)return deniedFolderId;
+  try{const c=localStorage.getItem(DENIED_FOLDER_KEY);if(c){deniedFolderId=c;return c;}}catch(e){}
+  const search=await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${DENIED_FOLDER_NAME}' and '${HARDCODED_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+    {headers:{Authorization:`Bearer ${oauthToken}`}}
+  );
+  const sd=await search.json();
+  if(sd.files&&sd.files.length>0){
+    deniedFolderId=sd.files[0].id;
+    localStorage.setItem(DENIED_FOLDER_KEY,deniedFolderId);
+    return deniedFolderId;
+  }
+  const create=await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true',{
+    method:'POST',
+    headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+    body:JSON.stringify({name:DENIED_FOLDER_NAME,mimeType:'application/vnd.google-apps.folder',parents:[HARDCODED_FOLDER_ID]})
+  });
+  const created=await create.json();
+  deniedFolderId=created.id;
+  localStorage.setItem(DENIED_FOLDER_KEY,deniedFolderId);
+  return deniedFolderId;
+}
+
+async function moveFileToDriveFolder(fileId, targetFolderId, knownCurrentParent){
+  // Try to get current parents — may fail for files owned by other accounts
+  let currentParents=knownCurrentParent||'';
+  if(!currentParents){
+    try{
+      const meta=await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents&supportsAllDrives=true`,{
+        headers:{Authorization:`Bearer ${oauthToken}`}
+      });
+      const metaData=await meta.json();
+      currentParents=(metaData.parents||[]).join(',');
+    }catch(e){}
+  }
+  // Add to target folder, remove from current if known
+  const url=currentParents
+    ?`https://www.googleapis.com/drive/v3/files/${fileId}?addParents=${targetFolderId}&removeParents=${currentParents}&supportsAllDrives=true`
+    :`https://www.googleapis.com/drive/v3/files/${fileId}?addParents=${targetFolderId}&supportsAllDrives=true`;
+  const resp=await fetch(url,{
+    method:'PATCH',
+    headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+    body:JSON.stringify({})
+  });
+  if(!resp.ok){
+    const err=await resp.json().catch(()=>({}));
+    console.error('Move failed:',resp.status,err);
+    throw new Error(`Move failed: ${resp.status}`);
+  }
+}
+
+async function uploadFileToDrive(file,folderId){
+  const metadata={name:file.name,parents:[folderId]};
+  const form=new FormData();
+  form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
+  form.append('file',file);
+  const resp=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name&supportsAllDrives=true',{
+    method:'POST',
+    headers:{Authorization:`Bearer ${oauthToken}`},
+    body:form
+  });
+  if(!resp.ok)throw new Error('Upload failed');
+  return await resp.json();
+}
+
+// EXIF + thumbnail
+function convertDMSToDD(d,m,s,dir){let dd=d+m/60+s/3600;if(dir==='S'||dir==='W')dd*=-1;return dd;}
+function extractEXIF(file){
+  return new Promise((resolve)=>{
+    EXIF.getData(file,function(){
+      const lat=EXIF.getTag(this,'GPSLatitude'),latR=EXIF.getTag(this,'GPSLatitudeRef');
+      const lng=EXIF.getTag(this,'GPSLongitude'),lngR=EXIF.getTag(this,'GPSLongitudeRef');
+      if(lat&&lng&&latR&&lngR){
+        const la=convertDMSToDD(lat[0],lat[1],lat[2],latR),lo=convertDMSToDD(lng[0],lng[1],lng[2],lngR);
+        if(!isNaN(la)&&!isNaN(lo)&&la!==0&&lo!==0)resolve({lat:la,lng:lo});else resolve(null);
+      }else resolve(null);
+    });
+  });
+}
+function getThumb(file){
+  return new Promise((resolve)=>{
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        const ratio=Math.min(300/img.width,300/img.height,1);
+        canvas.width=Math.round(img.width*ratio);canvas.height=Math.round(img.height*ratio);
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+        resolve(canvas.toDataURL('image/jpeg',0.7));
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Upload flow
+function triggerUpload(){
+  document.getElementById('file-input').click();
+}
+
+// Perceptual hash — generates a 64-bit fingerprint from image pixel data
+// Two copies of the same photo will produce identical or near-identical hashes
+async function perceptualHash(file){
+  return new Promise((resolve)=>{
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      const img=new Image();
+      img.onload=()=>{
+        // Shrink to 8x8 grayscale — captures structure, ignores minor edits
+        const canvas=document.createElement('canvas');
+        canvas.width=8;canvas.height=8;
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,8,8);
+        const pixels=ctx.getImageData(0,0,8,8).data;
+        // Convert to grayscale values
+        const gray=[];
+        for(let i=0;i<64;i++){
+          const r=pixels[i*4],g=pixels[i*4+1],b=pixels[i*4+2];
+          gray.push(0.299*r+0.587*g+0.114*b);
+        }
+        // Average and build binary hash
+        const avg=gray.reduce((a,b)=>a+b,0)/64;
+        const hash=gray.map(v=>v>=avg?'1':'0').join('');
+        resolve(hash);
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function hashDistance(h1,h2){
+  if(!h1||!h2||h1.length!==h2.length)return 64;
+  let diff=0;
+  for(let i=0;i<h1.length;i++)if(h1[i]!==h2[i])diff++;
+  return diff;
+}
+
+function findDuplicate(hash){
+  // Distance of 5 or less out of 64 bits = same photo
+  // Check all three arrays — map pins, pending GPS tray, and review queue
+  for(const p of photos){
+    if(p.hash&&hashDistance(p.hash,hash)<=5)return p;
+  }
+  for(const p of pending){
+    if(p.hash&&hashDistance(p.hash,hash)<=5)return p;
+  }
+  for(const p of techReview){
+    if(p.hash&&hashDistance(p.hash,hash)<=5)return p;
+  }
+  return null;
+}
+
+// Show duplicate confirmation modal — returns promise resolving to true (upload) or false (skip)
+function confirmDuplicate(existingPhoto, newThumb){
+  return new Promise((resolve)=>{
+    const existing=photos.find(p=>p.id===existingPhoto.id)||pending.find(p=>p.id===existingPhoto.id)||techReview.find(p=>p.id===existingPhoto.id);
+    document.getElementById('dup-existing-thumb').src=existing?.thumb||'';
+    document.getElementById('dup-new-thumb').src=newThumb;
+    document.getElementById('dup-overlay').style.display='flex';
+    const skipBtn=document.getElementById('dup-skip-btn');
+    const uploadBtn=document.getElementById('dup-upload-btn');
+    const cleanup=()=>{
+      document.getElementById('dup-overlay').style.display='none';
+      skipBtn.replaceWith(skipBtn.cloneNode(true));
+      uploadBtn.replaceWith(uploadBtn.cloneNode(true));
+    };
+    document.getElementById('dup-skip-btn').onclick=()=>{cleanup();resolve(false);};
+    document.getElementById('dup-upload-btn').onclick=()=>{cleanup();resolve(true);};
+  });
+}
+
+// Market definitions — bounding boxes for each market
+const MARKETS = [
+  { name: 'Chattanooga', bounds: { minLat: 34.70, maxLat: 35.35, minLng: -85.70, maxLng: -84.90 } },
+  { name: 'Knoxville',   bounds: { minLat: 35.65, maxLat: 36.30, minLng: -84.40, maxLng: -83.50 } },
+  { name: 'Huntsville',  bounds: { minLat: 34.40, maxLat: 35.05, minLng: -87.00, maxLng: -86.10 } },
+  { name: 'Birmingham',  bounds: { minLat: 33.20, maxLat: 33.80, minLng: -87.20, maxLng: -86.40 } },
+  { name: 'Cincinnati',  bounds: { minLat: 39.00, maxLat: 39.45, minLng: -84.90, maxLng: -84.10 } },
+  { name: 'Northern Kentucky', bounds: { minLat: 38.70, maxLat: 39.15, minLng: -84.90, maxLng: -84.00 } },
+  { name: 'Dayton',      bounds: { minLat: 39.45, maxLat: 40.00, minLng: -84.50, maxLng: -83.85 } },
+];
+
+function detectMarket(lat, lng) {
+  for (const m of MARKETS) {
+    const b = m.bounds;
+    if (lat >= b.minLat && lat <= b.maxLat && lng >= b.minLng && lng <= b.maxLng) {
+      return m.name;
+    }
+  }
+  return null;
+}
+
+// Cache of subfolder IDs: "Brand — Market" -> Drive folder ID
+const subFolderCache = {};
+
+async function getOrCreateSubFolder(brand, market) {
+  const label = `${brandLabels[brand] || brand} — ${market}`;
+  if (subFolderCache[label]) return subFolderCache[label];
+  const parentId = HARDCODED_FOLDER_ID;
+  // Search for existing subfolder
+  const search = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(label)}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+    { headers: { Authorization: `Bearer ${oauthToken}` } }
+  );
+  const searchData = await search.json();
+  if (searchData.files && searchData.files.length > 0) {
+    subFolderCache[label] = searchData.files[0].id;
+    return subFolderCache[label];
+  }
+  // Create it
+  const create = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${oauthToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: label, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
+  });
+  const created = await create.json();
+  subFolderCache[label] = created.id;
+  return created.id;
+}
+
+async function processUploadFiles(files){
+  if(!files.length)return;
+  ensureAuth(async()=>{
+    showLoading(`Uploading to Drive...`,`0 of ${files.length}`);
+    let folderId;
+    try{folderId=await getOrCreateFolder();}
+    catch(e){hideLoading();toast('Could not access Drive folder.');return;}
+    let added=0,noGps=0,failed=0;
+    for(let i=0;i<files.length;i++){
+      const file=files[i];
+      if(!file.type.startsWith('image/'))continue;
+      updateLoadingProgress(`${i+1} of ${files.length} — ${file.name}`);
+      try{
+        const [thumb,coords,hash]=await Promise.all([getThumb(file),extractEXIF(file),perceptualHash(file)]);
+        // Check for duplicate by content fingerprint (ignores filename)
+        const dupMatch=findDuplicate(hash);
+        if(dupMatch){
+          hideLoading();
+          const proceed=await confirmDuplicate(dupMatch,thumb);
+          showLoading(`Uploading to Drive...`,`${i+1} of ${files.length}`);
+          if(!proceed)continue;
+        }
+        const brand=guessBrand(file.name);
+        const id=Date.now()+Math.random().toString(36).slice(2);
+        // Determine target folder — subfolder if GPS known, root folder otherwise
+        let targetFolderId=folderId;
+        let market=null;
+        if(coords){
+          market=detectMarket(coords.lat,coords.lng);
+          if(market){
+            try{targetFolderId=await getOrCreateSubFolder(brand,market);}
+            catch(e){targetFolderId=folderId;}
+          }
+        }
+        const driveFile=await uploadFileToDrive(file,targetFolderId);
+        if(isTechMode){
+          // Tech page uploads always go to review queue
+          const reviewItem={id,name:file.name,brand,thumb,hash,desc:null,
+            driveId:driveFile.id,locationHint:null,coords:coords||null,
+            market:market||null,submittedBy:'Tech',submittedAt:new Date().toISOString()};
+          techReview.push(reviewItem);added++;
+        }else if(coords){
+          const p={id,name:file.name,lat:coords.lat,lng:coords.lng,brand,used:false,thumb,hash,driveId:driveFile.id,manual:false,market:market||'Unknown'};
+          photos.push(p);addMarker(p);refreshMarker(p);added++;
+        }else{
+          pending.push({id,name:file.name,brand,thumb,hash,driveId:driveFile.id});
+          noGps++;
+        }
+      }catch(e){console.error('Failed:',file.name,e);failed++;}
+    }
+    save();
+    if(added>0){
+      const pinned=photos.filter(p=>(activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used));
+      if(pinned.length>0)map.fitBounds(L.latLngBounds(pinned.map(p=>[p.lat,p.lng])),{padding:[60,60]});
+    }
+    renderPendingPanel();updateStats();hideLoading();
+    let msg=`Uploaded ${added+noGps} to Drive, pinned ${added}`;
+    if(noGps>0)msg+=` · ${noGps} need manual location`;
+    if(failed>0)msg+=` · ${failed} failed`;
+    toast(msg);
+  });
+}
+
+document.getElementById('file-input').addEventListener('change',(e)=>{
+  if(isTechMode){e.target.value='';return;}
+  processUploadFiles(Array.from(e.target.files));e.target.value='';
+});
+
+// Drag and drop onto page
+document.addEventListener('dragover',(e)=>{
+  if(isTechMode)return;
+  e.preventDefault();
+  document.getElementById('drop-zone-overlay').style.display='flex';
+});
+document.addEventListener('dragleave',(e)=>{
+  if(isTechMode)return;
+  if(!e.relatedTarget)document.getElementById('drop-zone-overlay').style.display='none';
+});
+document.addEventListener('drop',(e)=>{
+  if(isTechMode)return;
+  e.preventDefault();
+  document.getElementById('drop-zone-overlay').style.display='none';
+  const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/'));
+  if(files.length)processUploadFiles(files);
+});
+
+// Drive Picker (add existing Drive photos)
+function openDrivePicker(){
+  ensureAuth(()=>{
+    if(!pickerApiLoaded){
+      if(!window.gapi){loadPickerApi();setTimeout(showPicker,1500);}
+      else{gapi.load('picker',()=>{pickerApiLoaded=true;showPicker();});}
+    }else{showPicker();}
+  });
+}
+
+function showPicker(){
+  if(!pickerApiLoaded){toast('Picker still loading, try again.');return;}
+  const view=new google.picker.View(google.picker.ViewId.DOCS_IMAGES);
+  const picker=new google.picker.PickerBuilder()
+    .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+    .setOAuthToken(oauthToken)
+    .addView(view)
+    .setCallback(pickerCallback)
+    .build();
+  picker.setVisible(true);
+}
+
+async function pickerCallback(data){
+  if(data.action!==google.picker.Action.PICKED)return;
+  const docs=data.docs;
+  showLoading(`Loading ${docs.length} photo${docs.length>1?'s':''} from Drive...`);
+  let added=0,noGps=0;
+  for(let i=0;i<docs.length;i++){
+    const doc=docs[i];
+    if(photos.find(p=>p.driveId===doc.id)||pending.find(p=>p.driveId===doc.id))continue;
+    updateLoadingProgress(`${i+1} of ${docs.length} — ${doc.name}`);
+    try{
+      const resp=await fetch(`https://www.googleapis.com/drive/v3/files/${doc.id}?alt=media`,{
+        headers:{Authorization:`Bearer ${oauthToken}`}
+      });
+      const blob=await resp.blob();
+      const file=new File([blob],doc.name,{type:blob.type});
+      const [thumb,coords]=await Promise.all([getThumb(file),extractEXIF(file)]);
+      const id=Date.now()+Math.random().toString(36).slice(2);
+      if(coords){
+        const p={id,name:doc.name,lat:coords.lat,lng:coords.lng,brand:guessBrand(doc.name),used:false,thumb,driveId:doc.id,manual:false};
+        photos.push(p);addMarker(p);refreshMarker(p);added++;
+      }else{
+        pending.push({id,name:doc.name,brand:guessBrand(doc.name),thumb,driveId:doc.id});noGps++;
+      }
+    }catch(e){console.error('Failed:',doc.name,e);}
+  }
+  save();
+  if(added>0){
+    const pinned=photos.filter(p=>(activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used));
+    if(pinned.length>0)map.fitBounds(L.latLngBounds(pinned.map(p=>[p.lat,p.lng])),{padding:[60,60]});
+  }
+  renderPendingPanel();updateStats();hideLoading();
+  let msg=`Added ${added} photo${added!==1?'s':''}`;
+  if(noGps>0)msg+=` · ${noGps} need manual location`;
+  toast(msg);
+}
+
+// CSV
+function exportCSV(){
+  if(!photos.length){toast('No photos to export yet.');return;}
+  const header='id,name,lat,lng,brand,used,manual,driveId';
+  const rows=photos.map(p=>[p.id,`"${p.name.replace(/"/g,'""')}"`,p.lat,p.lng,p.brand,p.used?'true':'false',p.manual?'true':'false',p.driveId||''].join(','));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([[header,...rows].join('\n')],{type:'text/csv'}));
+  a.download=`gbp-photo-inventory-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();toast(`Exported ${photos.length} photos.`);
+}
+
+document.getElementById('csv-input').addEventListener('change',function(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    const lines=ev.target.result.trim().split('\n');
+    if(lines.length<2){toast('CSV appears empty.');return;}
+    const h=lines[0].split(',');
+    const idx={id:h.indexOf('id'),name:h.indexOf('name'),lat:h.indexOf('lat'),lng:h.indexOf('lng'),brand:h.indexOf('brand'),used:h.indexOf('used'),manual:h.indexOf('manual'),driveId:h.indexOf('driveId')};
+    if(idx.lat===-1||idx.lng===-1){toast('CSV missing required columns.');return;}
+    let added=0,skipped=0;
+    for(let i=1;i<lines.length;i++){
+      const cols=lines[i].match(/(".*?"|[^,]+|(?<=,)(?=,)|(?<=,)$|^(?=,))/g)||lines[i].split(',');
+      const c=cols.map(x=>x.replace(/^"|"$/g,'').replace(/""/g,'"'));
+      const id=c[idx.id]||(Date.now()+Math.random().toString(36).slice(2));
+      const lat=parseFloat(c[idx.lat]),lng=parseFloat(c[idx.lng]);
+      if(isNaN(lat)||isNaN(lng)){skipped++;continue;}
+      if(photos.find(p=>p.id===id)){skipped++;continue;}
+      const p={id,name:c[idx.name]||'unknown',lat,lng,brand:c[idx.brand]||'mosquito',used:c[idx.used]==='true',manual:c[idx.manual]==='true',thumb:null,driveId:c[idx.driveId]||null};
+      photos.push(p);addMarker(p);added++;
+    }
+    if(added>0){map.fitBounds(L.latLngBounds(photos.map(p=>[p.lat,p.lng])),{padding:[60,60]});save();updateStats();}
+    toast(`Imported ${added} photos${skipped>0?`, ${skipped} skipped`:''}.`);
+  };
+  reader.readAsText(file);this.value='';
+});
+
+// Pending panel
+// Claude vision API — analyze photo for location clues
+async function analyzePhotoLocation(thumb, photoId) {
+  const markets = MARKETS.map(m => m.name).join(', ');
+  const systemPrompt = `You are analyzing field service photos to determine their geographic location. 
+The possible markets are: ${markets} (all in the southeastern US / Ohio / Kentucky region).
+Look for ANY visual location indicators: street signs, business signs, landmarks, license plates, 
+regional vegetation, architecture styles, terrain, or any other geographic clues.
+Respond ONLY with valid JSON in this exact format:
+{"confidence":"high|medium|low|none","market":"market name or null","reason":"brief explanation"}
+If you cannot determine the location, use confidence "none" and market null.
+Never guess without evidence. Be honest about uncertainty.`;
+
+  try {
+    // Extract base64 from data URL
+    const base64 = thumb.split(',')[1];
+    const mediaType = thumb.split(';')[0].split(':')[1];
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 200,
+        system: systemPrompt,
+        messages: [{
+          role: 'user',
+          content: [{
+            type: 'image',
+            source: { type: 'base64', media_type: mediaType, data: base64 }
+          }, {
+            type: 'text',
+            text: 'Analyze this photo for geographic location clues. Which market does it belong to?'
+          }]
+        }]
+      })
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    const text = data.content?.[0]?.text || '';
+    // Parse JSON from response
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    return JSON.parse(match[0]);
+  } catch(e) {
+    console.error('AI analysis failed:', e);
+    return null;
+  }
+}
+
+function showAiSuggestion(p, result, row) {
+  // Remove any existing suggestion
+  const existing = row.querySelector('.ai-suggestion,.ai-analyzing');
+  if (existing) existing.remove();
+
+  if (!result || result.confidence === 'none' || !result.market) {
+    const el = document.createElement('div');
+    el.className = 'ai-suggestion';
+    el.innerHTML = `<i class="ti ti-robot ai-suggestion-icon"></i>
+      <div class="ai-suggestion-text"><strong>AI:</strong> Can't determine location from this photo — please enter manually.</div>`;
+    row.appendChild(el);
+    return;
+  }
+
+  const confidenceClass = result.confidence === 'high' ? 'confidence-high' : result.confidence === 'medium' ? 'confidence-med' : 'confidence-low';
+  const el = document.createElement('div');
+  el.className = 'ai-suggestion';
+  el.innerHTML = `<i class="ti ti-robot ai-suggestion-icon"></i>
+    <div class="ai-suggestion-text">
+      <strong>AI suggests:</strong> ${result.market}
+      <span class="${confidenceClass}"> (${result.confidence} confidence)</span><br>
+      <span style="font-size:11px;color:var(--text-tertiary)">${result.reason}</span>
+    </div>
+    <button class="btn-accept-suggestion" onclick="acceptAiSuggestion('${p.id}','${result.market.replace(/'/g,"\'")}')">Accept</button>`;
+  row.appendChild(el);
+}
+
+window.acceptAiSuggestion = async function(id, market) {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Looking up...';
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(market + ', USA')}&countrycodes=us`);
+    const d = await r.json();
+    if (!d.length) { btn.disabled = false; btn.textContent = 'Accept'; toast('Could not geocode suggestion — try typing it manually.'); return; }
+    const coords = { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
+    const brand = document.getElementById(`brand-${id}`)?.value || 'mosquito';
+    // Pre-fill the address input
+    const input = document.getElementById(`addr-${id}`);
+    if (input) input.value = d[0].display_name;
+    // Store coords and enable pin button
+    window[`_coords_${id}`] = () => ({ coords, brand: document.getElementById(`brand-${id}`)?.value || brand });
+    const pinBtn = document.getElementById(`pinbtn-${id}`);
+    if (pinBtn) pinBtn.disabled = false;
+    btn.textContent = 'Accepted ✓'; btn.style.background = 'var(--green)';
+  } catch(e) { btn.disabled = false; btn.textContent = 'Accept'; }
+};
+
+function renderPendingPanel(){
+  const panel=document.getElementById('manual-panel'),body=document.getElementById('manual-body'),badge=document.getElementById('manual-badge');
+  if(!pending.length){panel.style.display='none';return;}
+  panel.style.display='block';badge.textContent=pending.length;body.innerHTML='';
+  if(!panelOpen){body.style.display='none';return;}
+  body.style.display='flex';
+  pending.forEach(p=>{
+    const row=document.createElement('div');row.className='manual-row';row.id=`pending-${p.id}`;
+    const thumbHtml=p.thumb
+      ?`<img class="manual-thumb" src="${p.thumb}" alt="${p.name}" onclick="openLightboxUrl('${p.thumb}')">`
+      :`<div class="manual-thumb-placeholder"><i class="ti ti-photo" aria-hidden="true"></i></div>`;
+    row.innerHTML=`
+      ${thumbHtml}
+      <div class="manual-filename">${p.name}${p.locationHint?`<br><span style="font-size:11px;color:var(--text-tertiary)">${p.locationHint}</span>`:''}</div>
+      <div class="manual-addr-wrap">
+        <input class="manual-addr" type="text" placeholder="Enter address or neighborhood..." id="addr-${p.id}" autocomplete="off">
+        <div class="suggestions" id="sug-${p.id}" style="display:none"></div>
+      </div>
+      <select class="brand-select" id="brand-${p.id}">
+        <option value="mosquito" ${p.brand==='mosquito'?'selected':''}>Mosquito Squad</option>
+        <option value="lawn" ${p.brand==='lawn'?'selected':''}>Lawn Squad</option>
+        <option value="newage" ${p.brand==='newage'?'selected':''}>New Age Lights</option>
+      </select>
+      <button class="pin-btn" id="pinbtn-${p.id}" disabled onclick="pinPending('${p.id}')">Pin it</button>
+      <button class="pin-btn" style="background:var(--red);padding:5px 8px;" onclick="deletePending('${p.id}')" title="Delete from Drive and remove"><i class="ti ti-trash" style="font-size:13px"></i></button>`;
+    body.appendChild(row);
+
+    // Trigger AI analysis if photo has a thumb
+    if(p.thumb){
+      const analyzing=document.createElement('div');
+      analyzing.className='ai-analyzing';
+      analyzing.innerHTML='<div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div> <span>Analyzing photo for location clues...</span>';
+      row.appendChild(analyzing);
+      analyzePhotoLocation(p.thumb, p.id).then(result=>{
+        showAiSuggestion(p, result, row);
+      });
+    }
+
+    const input=document.getElementById(`addr-${p.id}`),sugBox=document.getElementById(`sug-${p.id}`);
+    let selectedCoords=null;
+    input.addEventListener('input',()=>{
+      selectedCoords=null;document.getElementById(`pinbtn-${p.id}`).disabled=true;
+      clearTimeout(suggestTimers[p.id]);
+      const q=input.value.trim();if(q.length<3){sugBox.style.display='none';return;}
+      suggestTimers[p.id]=setTimeout(async()=>{
+        try{
+          const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}&countrycodes=us`);
+          const d=await r.json();if(!d.length){sugBox.style.display='none';return;}
+          sugBox.innerHTML='';
+          d.forEach(item=>{
+            const div=document.createElement('div');div.className='suggestion-item';div.textContent=item.display_name;
+            div.addEventListener('click',()=>{input.value=item.display_name;selectedCoords={lat:parseFloat(item.lat),lng:parseFloat(item.lon)};sugBox.style.display='none';document.getElementById(`pinbtn-${p.id}`).disabled=false;});
+            sugBox.appendChild(div);
+          });
+          sugBox.style.display='block';
+        }catch(e){sugBox.style.display='none';}
+      },400);
+    });
+    document.addEventListener('click',(ev)=>{if(!row.contains(ev.target))sugBox.style.display='none';});
+    window[`_coords_${p.id}`]=()=>({coords:selectedCoords,brand:document.getElementById(`brand-${p.id}`).value});
+  });
+}
+
+// Write GPS coordinates into JPEG EXIF data
+async function writeExifGps(blob, lat, lng) {
+  try {
+    const buf = await blob.arrayBuffer();
+    const data = new Uint8Array(buf);
+
+    // Check JPEG SOI marker
+    if (data[0] !== 0xFF || data[1] !== 0xD8) return blob;
+
+    // Build GPS IFD
+    function toRational(val) {
+      val = Math.abs(val);
+      const deg = Math.floor(val);
+      const minFull = (val - deg) * 60;
+      const min = Math.floor(minFull);
+      const sec = Math.round((minFull - min) * 60 * 100);
+      return { deg, min, sec };
+    }
+
+    const latR = toRational(lat);
+    const lngR = toRational(lng);
+    const latRef = lat >= 0 ? 0x4E : 0x53; // N or S
+    const lngRef = lng >= 0 ? 0x45 : 0x57; // E or W
+
+    function writeUint32BE(arr, offset, val) {
+      arr[offset]   = (val >> 24) & 0xFF;
+      arr[offset+1] = (val >> 16) & 0xFF;
+      arr[offset+2] = (val >>  8) & 0xFF;
+      arr[offset+3] =  val        & 0xFF;
+    }
+    function writeUint16BE(arr, offset, val) {
+      arr[offset]   = (val >> 8) & 0xFF;
+      arr[offset+1] =  val       & 0xFF;
+    }
+
+    // Build GPS APP1 block
+    // Minimal GPS IFD: 6 entries (GPSLatRef, GPSLat, GPSLngRef, GPSLng, GPSAltRef, GPSAlt)
+    // We'll build a minimal but valid EXIF block with just GPS
+    const EXIF_HEADER = [0x45,0x78,0x69,0x66,0x00,0x00]; // "Exif"
+    const TIFF_HEADER = [0x49,0x49,0x2A,0x00,0x08,0x00,0x00,0x00]; // LE, magic, offset to IFD0
+
+    // IFD0: 1 entry pointing to GPS IFD
+    // Entry: tag=0x8825 (GPSInfo), type=4 (LONG), count=1, value=offset
+    const ifd0EntryCount = 1;
+    const ifd0Size = 2 + ifd0EntryCount * 12 + 4; // count + entries + next IFD offset
+    const gpsIfdOffset = 8 + ifd0Size; // after TIFF header + IFD0
+
+    // GPS IFD: 4 entries
+    const gpsEntryCount = 4;
+    const gpsIfdSize = 2 + gpsEntryCount * 12 + 4;
+    const gpsDataOffset = gpsIfdOffset + gpsIfdSize;
+
+    // Data: LatRef(2), LngRef(2), Lat(3 rationals = 24), Lng(3 rationals = 24) = 52 bytes
+    const totalTiff = gpsDataOffset + 52;
+    const tiff = new Uint8Array(totalTiff);
+
+    // TIFF header
+    tiff.set([0x49,0x49,0x2A,0x00], 0); // LE + magic
+    writeUint32BE(tiff, 4, 0); // placeholder - we'll use LE
+    tiff[4]=8; tiff[5]=0; tiff[6]=0; tiff[7]=0; // IFD0 at offset 8 (LE)
+
+    // IFD0 entry count
+    tiff[8]=1; tiff[9]=0;
+    // Entry: GPSInfo tag
+    tiff[10]=0x25; tiff[11]=0x88; // tag 0x8825 LE
+    tiff[12]=4; tiff[13]=0;       // type LONG
+    tiff[14]=1; tiff[15]=0; tiff[16]=0; tiff[17]=0; // count=1
+    tiff[18]=gpsIfdOffset&0xFF; tiff[19]=(gpsIfdOffset>>8)&0xFF; tiff[20]=0; tiff[21]=0; // offset LE
+    // Next IFD = 0
+    tiff[22]=0; tiff[23]=0; tiff[24]=0; tiff[25]=0;
+
+    // GPS IFD
+    let g = gpsIfdOffset;
+    tiff[g]=gpsEntryCount; tiff[g+1]=0; g+=2;
+
+    function gpsEntry(tag, type, count, valOrOffset, isInline) {
+      tiff[g]=tag&0xFF; tiff[g+1]=(tag>>8)&0xFF;
+      tiff[g+2]=type&0xFF; tiff[g+3]=0;
+      tiff[g+4]=count&0xFF; tiff[g+5]=0; tiff[g+6]=0; tiff[g+7]=0;
+      if(isInline){
+        tiff[g+8]=valOrOffset&0xFF; tiff[g+9]=(valOrOffset>>8)&0xFF;
+        tiff[g+10]=0; tiff[g+11]=0;
+      }else{
+        tiff[g+8]=valOrOffset&0xFF; tiff[g+9]=(valOrOffset>>8)&0xFF; tiff[g+10]=0; tiff[g+11]=0;
+      }
+      g+=12;
+    }
+
+    const latRefOff = gpsDataOffset;
+    const lngRefOff = gpsDataOffset + 2;
+    const latOff    = gpsDataOffset + 4;
+    const lngOff    = gpsDataOffset + 28;
+
+    gpsEntry(0x0001, 2, 2, latRefOff, false);  // GPSLatitudeRef
+    gpsEntry(0x0002, 5, 3, latOff,    false);  // GPSLatitude
+    gpsEntry(0x0003, 2, 2, lngRefOff, false);  // GPSLongitudeRef
+    gpsEntry(0x0004, 5, 3, lngOff,    false);  // GPSLongitude
+    // Next IFD = 0
+    tiff[g]=0;tiff[g+1]=0;tiff[g+2]=0;tiff[g+3]=0;
+
+    // Write data
+    tiff[latRefOff] = latRef; tiff[latRefOff+1] = 0;
+    tiff[lngRefOff] = lngRef; tiff[lngRefOff+1] = 0;
+
+    function writeRational(arr, off, r) {
+      arr[off]   =  r.deg        & 0xFF; arr[off+1] = (r.deg >>  8) & 0xFF;
+      arr[off+2] = (r.deg >> 16) & 0xFF; arr[off+3] = (r.deg >> 24) & 0xFF;
+      arr[off+4] = 1; arr[off+5]=0; arr[off+6]=0; arr[off+7]=0;
+      arr[off+8] =  r.min        & 0xFF; arr[off+9] = (r.min >>  8) & 0xFF;
+      arr[off+10]= (r.min >> 16) & 0xFF; arr[off+11]= (r.min >> 24) & 0xFF;
+      arr[off+12]= 1; arr[off+13]=0; arr[off+14]=0; arr[off+15]=0;
+      arr[off+16]=  r.sec        & 0xFF; arr[off+17]= (r.sec >>  8) & 0xFF;
+      arr[off+18]= (r.sec >> 16) & 0xFF; arr[off+19]= (r.sec >> 24) & 0xFF;
+      arr[off+20]= 100; arr[off+21]=0; arr[off+22]=0; arr[off+23]=0;
+    }
+    writeRational(tiff, latOff, latR);
+    writeRational(tiff, lngOff, lngR);
+
+    // Build APP1 segment
+    const exifPayload = new Uint8Array(EXIF_HEADER.length + tiff.length);
+    exifPayload.set(EXIF_HEADER, 0);
+    exifPayload.set(tiff, EXIF_HEADER.length);
+
+    const app1Len = exifPayload.length + 2; // +2 for length field itself
+    const app1 = new Uint8Array(4 + exifPayload.length);
+    app1[0] = 0xFF; app1[1] = 0xE1; // APP1 marker
+    app1[2] = (app1Len >> 8) & 0xFF; app1[3] = app1Len & 0xFF;
+    app1.set(exifPayload, 4);
+
+    // Insert APP1 after SOI (first 2 bytes), before existing data
+    // Skip any existing APP1/EXIF blocks to avoid duplicates
+    let insertAt = 2;
+    let i = 2;
+    while (i < data.length - 1) {
+      if (data[i] !== 0xFF) break;
+      const marker = data[i+1];
+      if (marker === 0xE1) {
+        // Skip existing APP1
+        const segLen = (data[i+2] << 8) | data[i+3];
+        i += 2 + segLen;
+        insertAt = i;
+      } else if (marker >= 0xE0 && marker <= 0xEF) {
+        // Skip other APPn
+        const segLen = (data[i+2] << 8) | data[i+3];
+        i += 2 + segLen;
+        insertAt = i;
+      } else {
+        break;
+      }
+    }
+
+    // Build final JPEG
+    const result = new Uint8Array(2 + app1.length + (data.length - insertAt));
+    result.set(data.slice(0, 2), 0);        // SOI
+    result.set(app1, 2);                     // new GPS APP1
+    result.set(data.slice(insertAt), 2 + app1.length); // rest of image
+
+    return new Blob([result], {type: blob.type||'image/jpeg'});
+  } catch(e) {
+    console.error('EXIF write failed:', e);
+    return blob; // return original if anything fails
+  }
+}
+
+// Re-upload a Drive file with GPS EXIF written in
+async function geotagDriveFile(driveId, lat, lng, filename) {
+  try {
+    // Download original
+    const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?alt=media&supportsAllDrives=true`, {
+      headers: {Authorization: `Bearer ${oauthToken}`}
+    });
+    if (!resp.ok) return;
+    const originalBlob = await resp.blob();
+    // Write GPS EXIF
+    const taggedBlob = await writeExifGps(originalBlob, lat, lng);
+    // Re-upload as new version (patch)
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify({name: filename})], {type:'application/json'}));
+    form.append('file', taggedBlob);
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveId}?uploadType=multipart&supportsAllDrives=true`, {
+      method: 'PATCH',
+      headers: {Authorization: `Bearer ${oauthToken}`},
+      body: form
+    });
+  } catch(e) {
+    console.error('Geotag failed:', e);
+  }
+}
+
+function pinPendingWith(id,coords,brand){
+  const pIdx=pending.findIndex(x=>x.id===id);if(pIdx===-1)return;
+  const p=pending[pIdx];
+  const photo={id:p.id,name:p.name,lat:coords.lat,lng:coords.lng,brand,used:false,thumb:p.thumb,driveId:p.driveId||null,manual:true};
+  photos.push(photo);pending.splice(pIdx,1);
+  addMarker(photo);map.setView([coords.lat,coords.lng],14);
+  // Update localStorage immediately so sync can't restore the old pending list
+  try{
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null}))));
+    localStorage.setItem(PENDING_KEY,JSON.stringify(pending));
+  }catch(e){}
+  save();
+  // Force immediate Drive save so pin survives a sync
+  if(oauthToken)saveToDrive();
+  // Write GPS EXIF into the Drive file in the background
+  if(photo.driveId&&oauthToken){
+    geotagDriveFile(photo.driveId,coords.lat,coords.lng,photo.name)
+      .then(()=>toast('Photo geotagged in Drive.'))
+      .catch(()=>{});
+  }
+  renderPendingPanel();updateStats();
+}
+window.pinPending=function(id){const g=window[`_coords_${id}`];if(!g)return;const{coords,brand}=g();if(!coords)return;pinPendingWith(id,coords,brand);};
+
+window.deletePending=async function(id){
+  const idx=pending.findIndex(x=>x.id===id);if(idx===-1)return;
+  const p=pending[idx];
+  if(!confirm('Remove this photo? It will be deleted from Drive too.'))return;
+  // Track as deleted so sync never restores it
+  deletedIds.add(p.id);
+  if(p.driveId)deletedIds.add(p.driveId);
+  // Delete file from Drive
+  if(p.driveId&&oauthToken){
+    try{
+      const delResp=await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
+        method:'DELETE',headers:{Authorization:`Bearer ${oauthToken}`}
+      });
+      if(!delResp.ok&&delResp.status!==204){
+        await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
+          method:'PATCH',headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+          body:JSON.stringify({trashed:true})
+        });
+      }
+    }catch(e){console.error('Drive delete failed:',e);}
+  }
+  pending.splice(idx,1);
+  // Save to localStorage immediately
+  try{localStorage.setItem(PENDING_KEY,JSON.stringify(pending));}catch(e){}
+  save();
+  // Await Drive save so sync can't overwrite before it completes
+  if(oauthToken)await saveToDrive();
+  renderPendingPanel();updateStats();
+  toast('Photo removed.');
+};
+
+document.getElementById('manual-header').addEventListener('click',()=>{
+  panelOpen=!panelOpen;
+  document.getElementById('manual-body').style.display=panelOpen?'flex':'none';
+  document.getElementById('collapse-icon').className=panelOpen?'ti ti-chevron-up':'ti ti-chevron-down';
+});
+document.querySelectorAll('.filter-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');activeBrand=btn.dataset.brand;applyFilters();
+  });
+});
+document.getElementById('toggle-used-btn').addEventListener('click',function(){
+  showUsed=!showUsed;this.classList.toggle('active',showUsed);
+  this.textContent=showUsed?'Hide used':'Show used';applyFilters();
+});
+document.addEventListener('keydown',(e)=>{if(e.key==='Escape')closeLightbox();});
+
+// Description editing
+window.editDesc=function(id){
+  const wrap=document.getElementById(`desc-edit-${id}`);
+  if(wrap)wrap.style.display=wrap.style.display==='none'?'block':'none';
+};
+window.saveDesc=function(id){
+  const p=photos.find(x=>x.id===id);if(!p)return;
+  const input=document.getElementById(`desc-input-${id}`);
+  if(!input)return;
+  p.desc=input.value.trim();
+  save();
+  if(oauthToken)saveToDrive();
+  map.closePopup();
+  toast('Description saved.');
+};
+
+// Tech upload page logic
+let techSelectedFile=null;
+let techSelectedFiles=[];
+let techSelectedCoords=null;
+let techSuggestTimer=null;
+
+// Tech photo grid render — uses outer techSelectedFiles
+function renderTechPhotoGrid(){
+  const grid=document.getElementById('tech-photo-grid');
+  const dropZone=document.getElementById('tech-drop-zone');
+  const locationInput=document.getElementById('tech-location');
+  if(!grid)return;
+  const grid2=document.getElementById('tech-photo-grid');
+  if(!techSelectedFiles.length){
+    grid.style.display='none';
+    if(dropZone)dropZone.style.display='block';
+    checkTechSubmitReady();
+    return;
+  }
+  if(dropZone)dropZone.style.display='none';
+  grid.style.display='grid';
+  grid.innerHTML='';
+  const countDiv=document.createElement('div');
+  countDiv.style.cssText='grid-column:1/-1;font-size:13px;color:var(--color-text-secondary,#6b6b67);text-align:center;margin-bottom:4px;';
+  countDiv.innerHTML=`${techSelectedFiles.length} photo${techSelectedFiles.length>1?'s':''} selected &nbsp;<label for="tech-file-input" style="font-size:12px;color:#185FA5;cursor:pointer;text-decoration:underline">Add more</label>`;
+  grid.appendChild(countDiv);
+  techSelectedFiles.forEach((file,i)=>{
+    const wrap=document.createElement('div');
+    wrap.className='tech-photo-thumb-wrap';
+    const img=document.createElement('img');
+    img.src=URL.createObjectURL(file);
+    img.alt=file.name;
+    const removeBtn=document.createElement('button');
+    removeBtn.className='tech-photo-remove';
+    removeBtn.innerHTML='<i class="ti ti-x" style="font-size:10px"></i>';
+    removeBtn.onclick=(e)=>{e.stopPropagation();techSelectedFiles.splice(i,1);renderTechPhotoGrid();};
+    wrap.appendChild(img);wrap.appendChild(removeBtn);
+    grid.appendChild(wrap);
+  });
+  if(!techSelectedCoords){
+    extractEXIF(techSelectedFiles[0]).then(coords=>{
+      if(coords){
+        techSelectedCoords=coords;
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`)
+          .then(r=>r.json()).then(d=>{
+            if(d.display_name){
+              const li=document.getElementById('tech-location');
+              if(li)li.value=d.display_name;
+              checkTechSubmitReady();
+            }
+          }).catch(()=>{});
+      }
+    });
+  }
+  checkTechSubmitReady();
+}
+
+function initTechUploadPage(){
+  document.getElementById('tech-upload-page').style.display='block';
+  document.getElementById('app').style.display='none';
+
+  techSelectedFiles=[];
+  techSelectedCoords=null;
+
+  const nameInput=document.getElementById('tech-name');
+  const locationInput=document.getElementById('tech-location');
+  const sugBox=document.getElementById('tech-suggestions');
+
+  // Restore saved name
+  const savedName=localStorage.getItem('gbp_tech_name');
+  if(savedName&&nameInput)nameInput.value=savedName;
+  if(nameInput){
+    nameInput.addEventListener('input',()=>{
+      localStorage.setItem('gbp_tech_name',nameInput.value.trim());
+      checkTechSubmitReady();
+    });
+  }
+
+  // File input change — only adds to array, no upload
+  const fileInput=document.getElementById('tech-file-input');
+  if(fileInput){
+    fileInput.addEventListener('change',(e)=>{
+      const newFiles=Array.from(e.target.files).filter(f=>f.type.startsWith('image/')||f.type.startsWith('image/heic')||f.name.toLowerCase().endsWith('.heic')||f.name.toLowerCase().endsWith('.heif'));
+      if(newFiles.length){
+        techSelectedFiles=[...techSelectedFiles,...newFiles];
+        renderTechPhotoGrid();
+      }
+      e.target.value='';
+    });
+  }
+
+  // Drag and drop onto tech upload page
+  const techPage=document.getElementById('tech-upload-page');
+  techPage.addEventListener('dragover',(e)=>{e.preventDefault();e.stopPropagation();
+    const dz=document.getElementById('tech-drop-zone');
+    if(dz)dz.style.borderColor='#185FA5';
+  });
+  techPage.addEventListener('dragleave',(e)=>{
+    const dz=document.getElementById('tech-drop-zone');
+    if(dz)dz.style.borderColor='';
+  });
+  techPage.addEventListener('drop',(e)=>{
+    e.preventDefault();e.stopPropagation();
+    const dz=document.getElementById('tech-drop-zone');
+    if(dz)dz.style.borderColor='';
+    const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/')||f.name.toLowerCase().endsWith('.heic')||f.name.toLowerCase().endsWith('.heif'));
+    if(files.length){techSelectedFiles=[...techSelectedFiles,...files];renderTechPhotoGrid();}
+  });
+
+  locationInput.addEventListener('input',()=>{
+    techSelectedCoords=null;
+    clearTimeout(techSuggestTimer);
+    const q=locationInput.value.trim();
+    if(q.length<3){sugBox.style.display='none';checkTechSubmitReady();return;}
+    techSuggestTimer=setTimeout(async()=>{
+      try{
+        const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}&countrycodes=us`);
+        const d=await r.json();
+        if(!d.length){sugBox.style.display='none';return;}
+        sugBox.innerHTML='';
+        d.forEach(item=>{
+          const div=document.createElement('div');div.className='tech-suggestion-item';div.textContent=item.display_name;
+          div.addEventListener('click',()=>{
+            locationInput.value=item.display_name;
+            techSelectedCoords={lat:parseFloat(item.lat),lng:parseFloat(item.lon)};
+            sugBox.style.display='none';
+            checkTechSubmitReady();
+          });
+          sugBox.appendChild(div);
+        });
+        sugBox.style.display='block';
+      }catch(e){sugBox.style.display='none';}
+    },400);
+  });
+  document.addEventListener('click',(e)=>{
+    if(!document.getElementById('tech-addr-wrap')?.contains(e.target))sugBox.style.display='none';
+  });
+}
+
+function checkTechSubmitReady(){
+  const hasFiles=techSelectedFiles&&techSelectedFiles.length>0;
+  const hasLocation=document.getElementById('tech-location')?.value.trim().length>2||techSelectedCoords;
+  const hasName=document.getElementById('tech-name')?.value.trim().length>1;
+  const btn=document.getElementById('tech-submit-btn');
+  if(btn){
+    btn.disabled=!(hasFiles&&hasLocation&&hasName);
+    const count=techSelectedFiles?.length||0;
+    btn.innerHTML=`<i class="ti ti-cloud-upload"></i> Upload ${count>1?count+' Photos':'Photo'}`;
+  }
+}
+
+window.submitTechUpload=async function(){
+  if(!techSelectedFiles||!techSelectedFiles.length)return;
+  const btn=document.getElementById('tech-submit-btn');
+  const progress=document.getElementById('tech-progress');
+  btn.disabled=true;progress.style.display='block';
+  const brand=document.getElementById('tech-brand').value;
+  const desc=document.getElementById('tech-desc').value.trim();
+  const locationText=document.getElementById('tech-location').value.trim();
+  const techName=document.getElementById('tech-name')?.value.trim()||'Unknown';
+  const total=techSelectedFiles.length;
+
+  ensureAuth(async()=>{
+    try{
+      // Tech uploads always go to Pending Review folder — moved to market folder on Accept
+      const pendingFolder=await getOrCreatePendingReviewFolder();
+      let addedCount=0;
+      for(let i=0;i<techSelectedFiles.length;i++){
+        const file=techSelectedFiles[i];
+        progress.textContent=`Uploading photo ${i+1} of ${total}...`;
+        const [thumb,hash,coords]=await Promise.all([getThumb(file),perceptualHash(file),extractEXIF(file)]);
+        const dupMatch=findDuplicate(hash);
+        if(dupMatch){
+          const proceed=await confirmDuplicate(dupMatch,thumb);
+          if(!proceed)continue;
+        }
+        const fileCoords=coords||techSelectedCoords||null;
+        let market=null;
+        if(fileCoords)market=detectMarket(fileCoords.lat,fileCoords.lng);
+        const driveFile=await uploadFileToDrive(file,pendingFolder);
+        const id=Date.now()+Math.random().toString(36).slice(2);
+        const reviewItem={
+          id,name:file.name,brand,thumb,hash,
+          desc:desc||null,driveId:driveFile.id,
+          locationHint:locationText,
+          coords:fileCoords||null,
+          market:market||null,
+          submittedBy:techName,
+          submittedAt:new Date().toISOString()
+        };
+        techReview.push(reviewItem);
+        addedCount++;
+      }
+      // Save to localStorage immediately
+      try{localStorage.setItem('gbp_tech_review',JSON.stringify(techReview));}catch(e){}
+      save();
+      // Await Drive save — this is critical, don't show success until it completes
+      progress.textContent='Saving to Drive...';
+      if(oauthToken){
+        try{
+          await saveToDrive();
+        }catch(e){
+          console.error('Drive save failed:',e);
+          // Don't block success — file is in Drive, review item is in localStorage
+          // It will sync next time the marketer opens the map
+        }
+      }
+      updateReviewBadge();
+      progress.style.display='none';
+      document.getElementById('tech-upload-form').style.display='none';
+      const successEl=document.getElementById('tech-success');
+      successEl.style.display='block';
+      successEl.querySelector('p').textContent=
+        `${addedCount} photo${addedCount!==1?'s':''} uploaded and sent for review. Nice work.`;
+    }catch(e){
+      console.error(e);
+      progress.textContent='Upload failed — check your connection and try again.';
+      btn.disabled=false;
+    }
+  });
+};
+
+window.resetTechForm=function(){
+  techSelectedFiles=[];techSelectedCoords=null;
+  const fi=document.getElementById('tech-file-input');if(fi)fi.value='';
+  const grid=document.getElementById('tech-photo-grid');
+  if(grid){grid.style.display='none';grid.innerHTML='';}
+  const dz=document.getElementById('tech-drop-zone');if(dz)dz.style.display='block';
+  const loc=document.getElementById('tech-location');if(loc)loc.value='';
+  const desc=document.getElementById('tech-desc');if(desc)desc.value='';
+  const brand=document.getElementById('tech-brand');if(brand)brand.value=(activeBrand&&activeBrand!=='all')?activeBrand:'mosquito';
+  const btn=document.getElementById('tech-submit-btn');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-cloud-upload"></i> Upload Photo';}
+  const form=document.getElementById('tech-upload-form');if(form)form.style.display='block';
+  const succ=document.getElementById('tech-success');if(succ)succ.style.display='none';
+};
+
+// Latest upload banner
+function showLatestBanner(item){
+  // item can be a techReview item or a photo
+  const banner=document.getElementById('latest-banner');
+  if(!banner)return;
+  const img=document.getElementById('latest-banner-img');
+  const nameEl=document.getElementById('latest-banner-name');
+  const metaEl=document.getElementById('latest-banner-meta');
+  if(item.thumb)img.src=item.thumb;
+  img.style.display=item.thumb?'block':'none';
+  // Name: photo filename cleaned up, or desc
+  const displayName=item.desc||item.locationHint||item.name||'New photo';
+  nameEl.textContent=displayName;
+  // Meta: who + when + brand
+  const brand=brandLabels[item.brand]||item.brand||'';
+  const who=item.submittedBy?`${item.submittedBy} · `:'';
+  const when=item.submittedAt?new Date(item.submittedAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})+' · ':'';
+  metaEl.textContent=`${who}${when}${brand}`;
+  banner.style.display='flex';
+  // Auto-dismiss after 8 seconds
+  clearTimeout(window._bannerTimer);
+  window._bannerTimer=setTimeout(()=>dismissLatestBanner(),8000);
+}
+
+function dismissLatestBanner(){
+  const banner=document.getElementById('latest-banner');
+  if(banner)banner.style.display='none';
+  clearTimeout(window._bannerTimer);
+}
+
+// Scan Pending Review folder for files not yet in techReview
+async function scanPendingReviewFolder(){
+  if(!oauthToken)return;
+  try{
+    const folderId=await getOrCreatePendingReviewFolder();
+    const resp=await fetch(
+      `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false and mimeType contains 'image/'&fields=files(id,name,mimeType,createdTime)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+      {headers:{Authorization:`Bearer ${oauthToken}`}}
+    );
+    const data=await resp.json();
+    const driveFiles=data.files||[];
+    const knownDriveIds=new Set([
+      ...techReview.map(p=>p.driveId),
+      ...photos.map(p=>p.driveId),
+      ...pending.map(p=>p.driveId)
+    ].filter(Boolean));
+    // Find files in the folder that have no review record
+    const orphans=driveFiles.filter(f=>!knownDriveIds.has(f.id)&&!deletedIds.has(f.id));
+    if(!orphans.length)return;
+    // Fetch thumbnails for orphans and create review items
+    for(const f of orphans){
+      try{
+        const imgResp=await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`,{
+          headers:{Authorization:`Bearer ${oauthToken}`}
+        });
+        const blob=await imgResp.blob();
+        const file=new File([blob],f.name,{type:blob.type});
+        const [thumb,hash,coords]=await Promise.all([getThumb(file),perceptualHash(file),extractEXIF(file)]);
+        // Don't add if it's a duplicate of something we already have
+        const dup=findDuplicate(hash);
+        if(dup)continue;
+        const id=Date.now()+Math.random().toString(36).slice(2);
+        let market=null;
+        if(coords)market=detectMarket(coords.lat,coords.lng);
+        techReview.push({
+          id,name:f.name,brand:(activeBrand&&activeBrand!=='all')?activeBrand:'mosquito',thumb,hash,
+          desc:null,driveId:f.id,locationHint:null,
+          coords:coords||null,market:market||null,
+          submittedBy:'Unknown (recovered)',
+          submittedAt:f.createdTime||new Date().toISOString()
+        });
+      }catch(e){console.error('Failed to recover:',f.name,e);}
+    }
+    if(orphans.length>0){
+      save();
+      await saveToDrive();
+      updateReviewBadge();
+      renderReviewPanel();
+      toast(`Recovered ${orphans.length} untracked photo${orphans.length>1?'s':''} from Pending Review folder.`);
+    }
+  }catch(e){console.error('Scan failed:',e);}
+}
+
+// Sort existing Drive photos into market subfolders
+async function sortExistingPhotos(){
+  if(!oauthToken){toast('Sign in first — click Sync.');return;}
+  const btn=document.getElementById('sort-btn');
+  if(btn){btn.style.opacity='0.5';btn.style.pointerEvents='none';}
+  showLoading('Sorting photos into market folders...');
+  let moved=0,skipped=0,failed=0;
+  const toSort=photos.filter(p=>p.driveId&&p.lat&&p.lng);
+  for(let i=0;i<toSort.length;i++){
+    const p=toSort[i];
+    updateLoadingProgress(`${i+1} of ${toSort.length} — ${p.name}`);
+    const market=detectMarket(p.lat,p.lng);
+    if(!market){skipped++;continue;}
+    try{
+      const targetFolderId=await getOrCreateSubFolder(p.brand,market);
+      // Check if already in the right folder by trying to move
+      // (move is idempotent if already in target)
+      await moveFileToDriveFolder(p.driveId,targetFolderId,HARDCODED_FOLDER_ID);
+      // Update market on the photo object
+      p.market=market;
+      moved++;
+    }catch(e){
+      console.error('Sort failed for',p.name,e);
+      failed++;
+    }
+  }
+  save();
+  if(oauthToken)await saveToDrive();
+  hideLoading();
+  if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
+  toast(`Sorted ${moved} photo${moved!==1?'s':''}${skipped>0?` · ${skipped} no market match`:''}${failed>0?` · ${failed} failed`:''}.`);
+}
+
+// Geotag all existing pinned photos that have coordinates
+async function geotagAllPhotos(){
+  if(!oauthToken){toast('Sign in first — click Sync.');return;}
+  const toTag=photos.filter(p=>p.driveId&&p.lat&&p.lng);
+  if(!toTag.length){toast('No photos with coordinates to geotag.');return;}
+  const btn=document.getElementById('geotag-btn');
+  if(btn){btn.style.opacity='0.5';btn.style.pointerEvents='none';}
+  showLoading('Geotagging photos in Drive...');
+  let done=0,failed=0;
+  for(let i=0;i<toTag.length;i++){
+    const p=toTag[i];
+    updateLoadingProgress(`${i+1} of ${toTag.length} — ${p.name}`);
+    try{
+      await geotagDriveFile(p.driveId,p.lat,p.lng,p.name);
+      done++;
+    }catch(e){
+      console.error('Geotag failed for',p.name,e);
+      failed++;
+    }
+  }
+  hideLoading();
+  if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
+  toast(`Geotagged ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed`:''}.`);
+}
+
+// Review panel
+function updateReviewBadge(){
+  const badge=document.getElementById('review-badge');
+  const btn=document.getElementById('review-btn');
+  if(!badge||!btn)return;
+  const count=techReview.length;
+  badge.textContent=count;
+  badge.style.display=count>0?'flex':'none';
+}
+
+function toggleReviewPanel(){
+  const panel=document.getElementById('review-panel');
+  if(!panel)return;
+  const isOpen=panel.classList.contains('open');
+  if(isOpen){panel.classList.remove('open');}
+  else{panel.classList.add('open');renderReviewPanel();}
+}
+
+function renderReviewPanel(){
+  const body=document.getElementById('review-body');
+  const countEl=document.getElementById('review-count');
+  if(!body)return;
+  if(!techReview.length){
+    body.innerHTML=`<div id="review-empty"><i class="ti ti-check"></i>All caught up — no photos waiting for review.</div>`;
+    if(countEl)countEl.textContent='';
+    return;
+  }
+  if(countEl)countEl.textContent=`(${techReview.length})`;
+  body.innerHTML='';
+  techReview.forEach(p=>{
+    const color=brandColors[p.brand]||'#444';
+    const label=brandLabels[p.brand]||p.brand;
+    const gpsText=p.coords?`${parseFloat(p.coords.lat).toFixed(5)}, ${parseFloat(p.coords.lng).toFixed(5)}`:'No GPS — will need manual placement';
+    const card=document.createElement('div');
+    card.className='review-card';
+    card.id=`review-card-${p.id}`;
+    card.innerHTML=`
+      ${p.thumb?`<img src="${p.thumb}" alt="${p.name}" onclick="openLightboxUrl('${p.thumb}')">` : ''}
+      <div class="review-card-body">
+        <div class="review-card-name">${p.name}</div>
+        <span class="review-card-brand" style="background:${color}">${label}</span>
+        ${p.locationHint?`<div class="review-card-location"><i class="ti ti-map-pin" style="font-size:12px"></i> ${p.locationHint}</div>`:''}
+        ${p.desc?`<div class="review-card-desc">"${p.desc}"</div>`:''}
+        <div class="review-card-gps">${gpsText}</div>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px;display:flex;gap:10px;">
+          ${p.submittedBy?`<span><i class="ti ti-user" style="font-size:11px"></i> ${p.submittedBy}</span>`:''}
+          ${p.submittedAt?`<span><i class="ti ti-calendar" style="font-size:11px"></i> ${new Date(p.submittedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}</span>`:''}
+        </div>
+        <div class="review-card-actions">
+          <button class="btn-review-accept" onclick="acceptReview('${p.id}')"><i class="ti ti-check"></i> Accept</button>
+          <button class="btn-review-deny" onclick="denyReview('${p.id}')"><i class="ti ti-x"></i> Deny</button>
+        </div>
+      </div>`;
+    body.appendChild(card);
+  });
+}
+
+window.openLightboxUrl=function(src){
+  document.getElementById('lightbox-img').src=src;
+  document.getElementById('lightbox').style.display='flex';
+};
+
+window.acceptReview=async function(id){
+  const idx=techReview.findIndex(p=>p.id===id);if(idx===-1)return;
+  const p=techReview[idx];
+  const btn=document.querySelector(`#review-card-${id} .btn-review-accept`);
+  if(btn){btn.disabled=true;btn.textContent='Accepting...';}
+  // Move file from Pending Review folder to correct market folder in Drive
+  if(p.driveId&&oauthToken){
+    try{
+      let targetFolderId=HARDCODED_FOLDER_ID;
+      if(p.coords&&p.market){
+        try{targetFolderId=await getOrCreateSubFolder(p.brand,p.market);}catch(e){}
+      }else if(p.coords){
+        const market=detectMarket(p.coords.lat,p.coords.lng);
+        if(market){try{targetFolderId=await getOrCreateSubFolder(p.brand,market);}catch(e){}}
+      }
+      const pendingFolderForMove=await getOrCreatePendingReviewFolder();
+      await moveFileToDriveFolder(p.driveId,targetFolderId,pendingFolderForMove);
+    }catch(e){console.error('Move failed:',e);}
+  }
+  if(p.coords){
+    const photo={id:p.id,name:p.name,lat:p.coords.lat,lng:p.coords.lng,brand:p.brand,used:false,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,manual:false,market:p.market||'Unknown'};
+    photos.push(photo);addMarker(photo);refreshMarker(photo);
+  }else{
+    pending.push({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null});
+    renderPendingPanel();
+  }
+  // Mark as processed so sync never restores it to the review queue
+  deletedIds.add(p.id);
+  techReview.splice(idx,1);
+  // Write to localStorage immediately
+  try{localStorage.setItem('gbp_tech_review',JSON.stringify(techReview));}catch(e){}
+  save();
+  // Await Drive save before anything can sync back
+  if(oauthToken)await saveToDrive();
+  updateStats();updateReviewBadge();
+  const card=document.getElementById(`review-card-${id}`);
+  if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>{card.remove();if(!techReview.length)renderReviewPanel();},300);}
+  const countEl=document.getElementById('review-count');
+  if(countEl&&techReview.length)countEl.textContent=`(${techReview.length})`;
+  toast(`Photo accepted — ${p.coords?'pinned to map':'added to placement queue'}.`);
+};
+
+window.denyReview=async function(id){
+  const idx=techReview.findIndex(p=>p.id===id);if(idx===-1)return;
+  const p=techReview[idx];
+  const btn=document.querySelector(`#review-card-${id} .btn-review-deny`);
+  if(btn){btn.disabled=true;btn.textContent='Deleting...';}
+  // Rename file with DENIED prefix — works regardless of file ownership
+  if(p.driveId&&oauthToken){
+    try{
+      const newName=p.name.startsWith('DENIED — ')?p.name:`DENIED — ${p.name}`;
+      await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?supportsAllDrives=true`,{
+        method:'PATCH',
+        headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+        body:JSON.stringify({name:newName})
+      });
+    }catch(e){console.error('Rename failed:',e);}
+  }
+  // Mark as deleted so sync never restores it
+  deletedIds.add(p.id);
+  if(p.driveId)deletedIds.add(p.driveId);
+  techReview.splice(idx,1);
+  try{localStorage.setItem('gbp_tech_review',JSON.stringify(techReview));}catch(e){}
+  save();
+  if(oauthToken)await saveToDrive();
+  updateReviewBadge();
+  const card=document.getElementById(`review-card-${id}`);
+  if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>{card.remove();if(!techReview.length)renderReviewPanel();},300);}
+  const countEl=document.getElementById('review-count');
+  if(countEl&&techReview.length)countEl.textContent=`(${techReview.length})`;
+  toast('Photo denied — marked in Drive.');
+};
+
+loadConfig();load();loadPickerApi();
+// Update review badge on load
+setTimeout(updateReviewBadge,100);
+// Show tech upload page if ?upload in URL
+if(isTechMode){
+  ensureAuth(()=>{});// pre-auth silently
+  initTechUploadPage();
+}
+// Auto sign-in silently on page load so Drive syncs without user action
+window.addEventListener('load',()=>{
+  // Always load Google Identity Services for silent token refresh
+  if(window.google&&window.google.accounts){
+    tryAutoSignIn();
+  }else{
+    const s=document.createElement('script');
+    s.src='https://accounts.google.com/gsi/client';
+    s.onload=()=>{loadPickerApi();setTimeout(tryAutoSignIn,500);};
+    document.body.appendChild(s);
+  }
+});
+
+// Re-authenticate silently every 45 minutes to keep token fresh
+setInterval(()=>{
+  if(!window.google||!window.google.accounts)return;
+  try{
+    const client=google.accounts.oauth2.initTokenClient({
+      client_id:config.clientId,
+      scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+      callback:(resp)=>{
+        if(resp.access_token)oauthToken=resp.access_token;
+      }
+    });
+    client.requestAccessToken({prompt:'none'});
+  }catch(e){}
+}, 45*60*1000);
+function setSyncState(state){
+  const btn=document.getElementById('sync-btn');
+  const label=document.getElementById('sync-label');
+  if(!btn||!label)return;
+  if(state==='syncing'){
+    btn.style.opacity='0.6';btn.style.pointerEvents='none';
+    label.textContent='Syncing...';
+  }else if(state==='synced'){
+    btn.style.opacity='1';btn.style.pointerEvents='auto';
+    label.textContent='Synced';
+    btn.style.color='var(--green)';
+    setTimeout(()=>{label.textContent='Sync';btn.style.color='';},2500);
+  }else{
+    btn.style.opacity='1';btn.style.pointerEvents='auto';
+    label.textContent='Sync';btn.style.color='';
+  }
+}
+
+function manualSync(){
+  setSyncState('syncing');
+  ensureAuth(async()=>{
+    await loadFromDrive();
+    setSyncState('synced');
+    startAutoSync();
+  });
+}
+
+function tryAutoSignIn(){
+  // In view mode, don't require sign-in — just show cached data
+  if(isViewMode){
+    // Load from localStorage cache only
+    updateStats();checkNoPhotos();
+    return;
+  }
+  try{
+    const client=google.accounts.oauth2.initTokenClient({
+      client_id:config.clientId,
+      scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+      callback:(resp)=>{
+        if(resp.error||!resp.access_token){
+          if(resp.error&&resp.error!=='suppressed_by_user')showAccessBanner();
+          return;
+        }
+        oauthToken=resp.access_token;
+        hideAccessBanner();
+        setSyncState('syncing');
+        loadFromDrive().then(()=>{
+          setSyncState('synced');
+          startAutoSync();
+        });
+      }
+    });
+    client.requestAccessToken({prompt:'none'});
+  }catch(e){}
+}
+
+// Auto-sync every 2 minutes while signed in
+let autoSyncInterval=null;
+function startAutoSync(){
+  if(autoSyncInterval)return; // already running
+  autoSyncInterval=setInterval(async()=>{
+    if(!oauthToken)return;
+    // Silent background sync — no spinner, no toast unless new items arrive
+    try{
+      const prevReviewCount=techReview.length;
+      const prevPhotoCount=photos.length;
+      await loadFromDrive();
+      // Show banner if new photos arrived in review queue
+      if(techReview.length>prevReviewCount){
+        const newest=[...techReview].sort((a,b)=>new Date(b.submittedAt||0)-new Date(a.submittedAt||0))[0];
+        if(newest)showLatestBanner(newest);
+      }
+      // Refresh map if new approved photos arrived
+      if(photos.length>prevPhotoCount){
+        const bounds=L.latLngBounds(photos.map(p=>[p.lat,p.lng]));
+        if(photos.length>prevPhotoCount)toast(`${photos.length-prevPhotoCount} new photo${photos.length-prevPhotoCount>1?'s':''} added to map.`);
+      }
+    }catch(e){}
+  }, 2*60*1000); // 2 minutes
+}
+
+
+</script>
+</body>
+</html>
