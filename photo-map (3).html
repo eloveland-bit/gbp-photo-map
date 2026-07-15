@@ -543,7 +543,7 @@ function hideLoading(){document.getElementById('loading-overlay').style.display=
 // Serialize current state
 function getStateData(){
   return {
-    photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null,acceptedAt:p.acceptedAt||null})),
+    photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null,acceptedAt:p.acceptedAt||null,geotagged:p.geotagged||false})),
     pending: pending.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,driveId:p.driveId||null})),
     techReview: techReview.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null,coords:p.coords||null,submittedBy:p.submittedBy||null,submittedAt:p.submittedAt||null})),
     deletedIds: Array.from(deletedIds)
@@ -929,12 +929,12 @@ function rebuildLocMarker(key){
   const brand=getPrimaryBrand(ps);
   if(locMarkers[key]){
     locMarkers[key].setIcon(makeIcon(ps,brand));
-    locMarkers[key].setPopupContent(buildPopup(ps));
+    locMarkers[key].setPopupContent(()=>buildPopup(getPhotosAtLoc(key)));
     if(visible&&!map.hasLayer(locMarkers[key]))locMarkers[key].addTo(map);
     if(!visible&&map.hasLayer(locMarkers[key]))map.removeLayer(locMarkers[key]);
   }else{
     const marker=L.marker([ps[0].lat,ps[0].lng],{icon:makeIcon(ps,brand)})
-      .bindPopup(buildPopup(ps),{maxWidth:280,minWidth:250});
+      .bindPopup(()=>buildPopup(getPhotosAtLoc(key)),{maxWidth:280,minWidth:250});
     if(visible)marker.addTo(map);
     locMarkers[key]=marker;
   }
@@ -962,17 +962,15 @@ function updateStats(){
 function updateLastUpload(){
   const el=document.getElementById('last-upload');
   if(!el)return;
-  // Find most recently accepted photo by looking at acceptedAt or falling back to submittedAt
-  const allPhotos=[...photos].filter(p=>p.acceptedAt||p.driveId);
-  if(!allPhotos.length){el.textContent='';return;}
-  // Sort by acceptedAt if available, otherwise just use array order
-  const withDates=allPhotos.filter(p=>p.acceptedAt);
+  if(!photos.length){el.textContent='';return;}
+  const withDates=photos.filter(p=>p.acceptedAt);
   if(withDates.length>0){
     withDates.sort((a,b)=>new Date(b.acceptedAt)-new Date(a.acceptedAt));
     const d=new Date(withDates[0].acceptedAt);
     el.textContent=`Last upload: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`;
   }else{
-    el.textContent=`${allPhotos.length} photo${allPhotos.length!==1?'s':''} on map`;
+    // No acceptedAt yet — show total count as placeholder
+    el.textContent=`${photos.length} photo${photos.length!==1?'s':''} on map · upload date tracked going forward`;
   }
 }
 function checkNoPhotos(){
@@ -1873,7 +1871,7 @@ function pinPendingWith(id,coords,brand){
   // Write GPS EXIF into the Drive file in the background
   if(photo.driveId&&oauthToken){
     geotagDriveFile(photo.driveId,coords.lat,coords.lng,photo.name)
-      .then(()=>toast('Photo geotagged in Drive.'))
+      .then(()=>{photo.geotagged=true;save();toast('Photo geotagged in Drive.');})
       .catch(()=>{});
   }
   renderPendingPanel();updateStats();
@@ -2565,18 +2563,25 @@ async function geotagDriveFile(driveId,lat,lng,filename){
 
 async function geotagAllPhotos(){
   if(!oauthToken){toast('Sign in first — click Sync.');return;}
-  const toTag=photos.filter(p=>p.driveId&&p.lat&&p.lng);
-  if(!toTag.length){toast('No photos with coordinates to geotag.');return;}
+  // Only tag photos that haven't been geotagged yet
+  const toTag=photos.filter(p=>p.driveId&&p.lat&&p.lng&&!p.geotagged);
+  if(!toTag.length){
+    toast('All photos already geotagged!');return;
+  }
   const btn=document.getElementById('geotag-btn');
   if(btn){btn.style.opacity='0.5';btn.style.pointerEvents='none';}
-  showLoading('Geotagging photos in Drive...');
+  showLoading(`Geotagging ${toTag.length} untagged photo${toTag.length!==1?'s':''}...`);
   let done=0,failed=0;
   for(let i=0;i<toTag.length;i++){
     const p=toTag[i];
     updateLoadingProgress(`${i+1} of ${toTag.length} — ${p.name}`);
-    try{await geotagDriveFile(p.driveId,p.lat,p.lng,p.name);done++;}
-    catch(e){console.error('Geotag failed for',p.name,e);failed++;}
+    try{
+      await geotagDriveFile(p.driveId,p.lat,p.lng,p.name);
+      p.geotagged=true; // mark so we skip next time
+      done++;
+    }catch(e){console.error('Geotag failed for',p.name,e);failed++;}
   }
+  save();if(oauthToken)await saveToDrive();
   hideLoading();
   if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
   toast(`Geotagged ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed`:''}.`);
