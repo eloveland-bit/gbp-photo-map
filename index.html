@@ -310,6 +310,9 @@
       <button class="icon-btn marketer-only" id="geotag-btn" onclick="geotagAllPhotos()" title="Write GPS coordinates into all existing Drive photos">
         <i class="ti ti-map-pin-bolt"></i> Geotag All
       </button>
+      <button class="icon-btn marketer-only" id="hash-btn" onclick="hashAllPhotos()" title="Generate perceptual hash for all photos without one">
+        <i class="ti ti-fingerprint"></i> Hash All
+      </button>
       <button class="icon-btn marketer-only" id="dup-scan-btn" onclick="openDupScanPanel()" title="Scan all map photos for duplicates">
         <i class="ti ti-copy-off"></i> Scan Dupes
       </button>
@@ -318,6 +321,9 @@
       </button>
       <button class="icon-btn marketer-only" id="geotag-btn" onclick="geotagAllPhotos()" title="Write GPS coordinates into all existing Drive photos">
         <i class="ti ti-map-pin-bolt"></i> Geotag All
+      </button>
+      <button class="icon-btn marketer-only" id="hash-btn" onclick="hashAllPhotos()" title="Generate perceptual hash for all photos without one">
+        <i class="ti ti-fingerprint"></i> Hash All
       </button>
       <button class="icon-btn marketer-only" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
       <label class="icon-btn marketer-only" style="cursor:pointer">
@@ -2767,6 +2773,47 @@ window.skipDupPair=function(idx){
   const card=document.getElementById(`dup-pair-${idx}`);
   if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>card.remove(),300);}
 };
+
+// Generate perceptual hashes for all photos that don't have one yet
+async function hashAllPhotos(){
+  if(!oauthToken){toast('Sign in first — click Sync.');return;}
+  const toHash=photos.filter(p=>p.driveId&&!p.hash);
+  if(!toHash.length){toast('All photos already have hash data!');return;}
+  const btn=document.getElementById('hash-btn');
+  if(btn){btn.style.opacity='0.5';btn.style.pointerEvents='none';}
+  showLoading(`Generating hashes for ${toHash.length} photo${toHash.length!==1?'s':''}...`);
+  let done=0,failed=0;
+  for(let i=0;i<toHash.length;i++){
+    const p=toHash[i];
+    updateLoadingProgress(`${i+1} of ${toHash.length} — ${p.name}`);
+    try{
+      // Download thumbnail-size version for hashing (faster than full res)
+      const resp=await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?alt=media&supportsAllDrives=true`,{
+        headers:{Authorization:`Bearer ${oauthToken}`}
+      });
+      if(!resp.ok){failed++;continue;}
+      const blob=await resp.blob();
+      const file=new File([blob],p.name,{type:blob.type});
+      const hash=await perceptualHash(file);
+      p.hash=hash;
+      done++;
+      // Save every 10 photos so progress isn't lost if tab closes
+      if(done%10===0){
+        save();
+        if(oauthToken)saveToDrive();
+      }
+    }catch(e){
+      console.error('Hash failed for',p.name,e);
+      failed++;
+    }
+  }
+  // Final save
+  save();
+  if(oauthToken)await saveToDrive();
+  hideLoading();
+  if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
+  toast(`Hashed ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed`:''} — run Scan Dupes to check for matches.`);
+}
 
 loadConfig();load();loadPickerApi();
 // Update review badge on load
