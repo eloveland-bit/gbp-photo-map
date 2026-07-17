@@ -338,8 +338,9 @@
         <i class="ti ti-inbox"></i> Review
         <span id="review-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;">0</span>
       </button>
-      <button class="icon-btn marketer-only" id="dup-scan-btn" onclick="openDupScanPanel()">
+      <button class="icon-btn marketer-only" id="dup-scan-btn" onclick="openDupScanPanel()" style="position:relative">
         <i class="ti ti-copy-off"></i> Dupes
+        <span id="dup-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;">0</span>
       </button>
       <div class="tools-dropdown marketer-only">
         <button class="icon-btn" onclick="toggleToolsMenu()" id="tools-menu-btn">
@@ -886,6 +887,22 @@ function buildPhotoCard(p){
     </select>`;
   }
   html+=`</div>`;
+  // Location edit
+  if(!isTechMode&&!isViewMode){
+    html+=`<div style="font-size:11px;color:#9b9b97;font-family:var(--font-mono);margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+      ${parseFloat(p.lat).toFixed(4)}, ${parseFloat(p.lng).toFixed(4)}
+      <span style="font-size:10px;color:#185FA5;cursor:pointer;text-decoration:underline;font-family:var(--font)" onclick="editLocation('${p.id}')">edit location</span>
+    </div>
+    <div id="loc-edit-${p.id}" style="display:none;margin-bottom:8px;">
+      <div style="position:relative;">
+        <input type="text" id="loc-input-${p.id}" placeholder="Type address or neighborhood..." autocomplete="off"
+          style="width:100%;font-size:12px;padding:5px 7px;border-radius:6px;border:0.5px solid rgba(0,0,0,0.2);font-family:var(--font);">
+        <div id="loc-sug-${p.id}" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:2000;background:#fff;border:0.5px solid rgba(0,0,0,0.2);border-radius:6px;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:140px;overflow-y:auto;"></div>
+      </div>
+      <button onclick="saveLocation('${p.id}')" style="margin-top:4px;font-size:11px;padding:3px 10px;border-radius:6px;background:#185FA5;color:#fff;border:none;cursor:pointer;font-family:var(--font);">Save location</button>
+      <button onclick="document.getElementById('loc-edit-${p.id}').style.display='none'" style="margin-top:4px;margin-left:4px;font-size:11px;padding:3px 8px;border-radius:6px;background:#f5f5f3;color:#6b6b67;border:0.5px solid rgba(0,0,0,0.15);cursor:pointer;font-family:var(--font);">Cancel</button>
+    </div>`;
+  }
   // Description
   if(p.desc){
     html+=`<div class="popup-desc">${p.desc} <span style="font-size:10px;color:#9b9b97;cursor:pointer;text-decoration:underline" onclick="editDesc('${p.id}')">edit</span></div>`;
@@ -2044,6 +2061,86 @@ window.changeBrand=function(id,newBrand){
   toast('Brand updated.');
 };
 
+window.editLocation=function(id){
+  const wrap=document.getElementById(`loc-edit-${id}`);
+  if(!wrap)return;
+  const isOpen=wrap.style.display!=='none';
+  wrap.style.display=isOpen?'none':'block';
+  if(!isOpen){
+    // Set up address autocomplete
+    const input=document.getElementById(`loc-input-${id}`);
+    const sugBox=document.getElementById(`loc-sug-${id}`);
+    if(!input||!sugBox)return;
+    let selCoords=null;
+    let sugTimer=null;
+    input.addEventListener('input',()=>{
+      selCoords=null;
+      clearTimeout(sugTimer);
+      const q=input.value.trim();
+      if(q.length<3){sugBox.style.display='none';return;}
+      sugTimer=setTimeout(async()=>{
+        try{
+          const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}&countrycodes=us`);
+          const d=await r.json();
+          if(!d.length){sugBox.style.display='none';return;}
+          sugBox.innerHTML='';
+          d.forEach(item=>{
+            const div=document.createElement('div');
+            div.style.cssText='padding:7px 10px;font-size:12px;cursor:pointer;border-bottom:0.5px solid rgba(0,0,0,0.08);';
+            div.textContent=item.display_name;
+            div.addEventListener('mousedown',(e)=>{
+              e.preventDefault();
+              input.value=item.display_name;
+              selCoords={lat:parseFloat(item.lat),lng:parseFloat(item.lon)};
+              sugBox.style.display='none';
+              // Store for save
+              window[`_locCoords_${id}`]=selCoords;
+            });
+            sugBox.appendChild(div);
+          });
+          sugBox.style.display='block';
+        }catch(e){sugBox.style.display='none';}
+      },400);
+    });
+    input.addEventListener('blur',()=>setTimeout(()=>sugBox.style.display='none',200));
+    window[`_locCoords_${id}`]=null;
+  }
+};
+
+window.saveLocation=async function(id){
+  const p=photos.find(x=>x.id===id);if(!p)return;
+  const coords=window[`_locCoords_${id}`];
+  if(!coords){toast('Please select an address from the suggestions.');return;}
+  const oldKey=locKey(p);
+  p.lat=coords.lat;
+  p.lng=coords.lng;
+  // Update market
+  const newMarket=detectMarket(coords.lat,coords.lng);
+  if(newMarket)p.market=newMarket;
+  // Save
+  try{
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(photos.map(ph=>({id:ph.id,name:ph.name,lat:ph.lat,lng:ph.lng,brand:ph.brand,used:ph.used,thumb:ph.thumb,hash:ph.hash||null,desc:ph.desc||null,manual:true,driveId:ph.driveId||null,acceptedAt:ph.acceptedAt||null,geotagged:ph.geotagged||false}))));
+  }catch(e){}
+  save();
+  if(oauthToken){
+    saveToDrive();
+    // Geotag the Drive file with new coords
+    if(p.driveId){
+      geotagDriveFile(p.driveId,coords.lat,coords.lng,p.name)
+        .then(()=>{p.geotagged=true;save();}).catch(()=>{});
+    }
+  }
+  // Rebuild markers — old location and new
+  delete markers[id];
+  if(locMarkers[oldKey]){map.removeLayer(locMarkers[oldKey]);delete locMarkers[oldKey];}
+  addMarker(p);
+  const newKey=locKey(p);
+  rebuildLocMarker(newKey);
+  map.closePopup();
+  map.setView([coords.lat,coords.lng],14);
+  toast('Location updated.');
+};
+
 window.saveDesc=function(id){
   const p=photos.find(x=>x.id===id);if(!p)return;
   const input=document.getElementById(`desc-input-${id}`);
@@ -2452,6 +2549,8 @@ function updateReviewBadge(){
   const count=techReview.length;
   badge.textContent=count;
   badge.style.display=count>0?'flex':'none';
+  badge.style.alignItems='center';
+  badge.style.justifyContent='center';
 }
 
 function toggleReviewPanel(){
@@ -2761,6 +2860,9 @@ function runDupScan(){
   }
 
   countEl.textContent=`(${pairs.length} pair${pairs.length!==1?'s':''} found)`;
+  // Update dupes badge
+  const dupBadge=document.getElementById('dup-badge');
+  if(dupBadge){dupBadge.textContent=pairs.length;dupBadge.style.display=pairs.length>0?'flex':'none';dupBadge.style.alignItems='center';dupBadge.style.justifyContent='center';}
   body.innerHTML='';
 
   pairs.forEach(([a,b],idx)=>{
