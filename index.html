@@ -43,6 +43,24 @@
   .filter-btn[data-brand="mosquito"].active{background:var(--blue);}
   .filter-btn[data-brand="lawn"].active{background:var(--green);}
   .filter-btn[data-brand="newage"].active{background:var(--amber);}
+  /* Company modal */
+  #company-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:3000;align-items:center;justify-content:center;}
+  #company-modal{background:var(--bg-primary);border-radius:var(--radius-lg);border:0.5px solid var(--border-mid);padding:24px;width:420px;max-width:92vw;}
+  #company-modal h2{font-size:16px;font-weight:500;margin-bottom:6px;}
+  #company-modal p{font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.5;}
+  #company-modal label{font-size:12px;color:var(--text-secondary);display:block;margin-bottom:5px;margin-top:10px;}
+  #company-modal input,#company-modal select{width:100%;font-size:13px;padding:7px 10px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);font-family:var(--font);}
+  #company-modal input:focus,#company-modal select:focus{outline:none;border-color:var(--blue);}
+  .color-picker-row{display:flex;gap:8px;margin-bottom:4px;flex-wrap:wrap;}
+  .color-swatch{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:border 0.15s;}
+  .color-swatch.selected{border-color:var(--text-primary);}
+  .company-list{margin-bottom:16px;display:flex;flex-direction:column;gap:6px;}
+  .company-list-item{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg-secondary);border-radius:var(--radius-md);font-size:13px;}
+  .company-list-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .company-list-name{flex:1;}
+  .company-list-count{font-size:11px;color:var(--text-tertiary);}
+  .btn-company-delete{background:none;border:none;cursor:pointer;color:var(--text-tertiary);font-size:14px;padding:2px;}
+  .btn-company-delete:hover{color:var(--red);}
   .toolbar-right{margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0;}
   #stats{font-size:11px;color:var(--text-secondary);white-space:nowrap;}
   #last-upload{font-size:10px;color:var(--text-tertiary);white-space:nowrap;}
@@ -302,12 +320,16 @@
     <button class="icon-btn view-hidden" id="sync-btn" onclick="manualSync()">
       <i class="ti ti-refresh"></i> <span id="sync-label">Sync</span>
     </button>
-    <div class="tb-group">
+    <div class="tb-group" id="brand-filter-group">
       <button class="filter-btn active" data-brand="all">All</button>
       <button class="filter-btn" data-brand="mosquito">Mosquito Squad</button>
       <button class="filter-btn" data-brand="lawn">Lawn Squad</button>
       <button class="filter-btn" data-brand="newage">New Age Lights</button>
+      <!-- Custom company tabs injected here by JS -->
     </div>
+    <button class="icon-btn marketer-only view-hidden" onclick="showCompanyModal()" title="Manage companies" style="padding:3px 8px;font-size:11px;">
+      <i class="ti ti-building-plus"></i>
+    </button>
     <div class="toolbar-right">
       <button class="toggle-used marketer-only" id="toggle-used-btn">Show used</button>
       <span id="stats" class="marketer-only">0 unused · 0 used</span>
@@ -401,6 +423,7 @@
           <option value="mosquito">Mosquito Squad</option>
           <option value="lawn">Lawn Squad</option>
           <option value="newage">New Age Lights</option>
+          <!-- Custom companies added dynamically -->
         </select>
       </div>
       <div class="tech-field">
@@ -452,6 +475,23 @@
     <div id="dup-scan-empty">
       <i class="ti ti-copy-off"></i>
       Click Scan to check all photos for duplicates.
+    </div>
+  </div>
+</div>
+
+<!-- Company management modal -->
+<div id="company-overlay" onclick="if(event.target===this)hideCompanyModal()">
+  <div id="company-modal">
+    <h2>Manage Companies</h2>
+    <p>Add additional companies to track alongside your existing brands. Each gets its own filter tab and Drive subfolder.</p>
+    <div class="company-list" id="company-list"></div>
+    <label>Company name</label>
+    <input type="text" id="new-company-name" placeholder="e.g. Rhodes Ranch Dental" maxlength="40">
+    <label>Color</label>
+    <div class="color-picker-row" id="color-picker"></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn-cancel" onclick="hideCompanyModal()">Close</button>
+      <button class="btn-save" onclick="addCompany()">Add Company</button>
     </div>
   </div>
 </div>
@@ -842,6 +882,7 @@ function buildPhotoCard(p){
       <option value="mosquito" ${p.brand==='mosquito'?'selected':''}>Mosquito Squad</option>
       <option value="lawn" ${p.brand==='lawn'?'selected':''}>Lawn Squad</option>
       <option value="newage" ${p.brand==='newage'?'selected':''}>New Age Lights</option>
+      ${companies.map(co=>`<option value="${co.id}" ${p.brand===co.id?'selected':''}>${co.name}</option>`).join('')}
     </select>`;
   }
   html+=`</div>`;
@@ -1684,6 +1725,7 @@ function renderPendingPanel(){
         <option value="mosquito" ${p.brand==='mosquito'?'selected':''}>Mosquito Squad</option>
         <option value="lawn" ${p.brand==='lawn'?'selected':''}>Lawn Squad</option>
         <option value="newage" ${p.brand==='newage'?'selected':''}>New Age Lights</option>
+        ${companies.map(co=>`<option value="${co.id}" ${p.brand===co.id?'selected':''}>${co.name}</option>`).join('')}
       </select>
       <button class="pin-btn" id="pinbtn-${p.id}" disabled onclick="pinPending('${p.id}')">Pin it</button>
       <button class="pin-btn" style="background:var(--red);padding:5px 8px;" onclick="deletePending('${p.id}')" title="Delete from Drive and remove"><i class="ti ti-trash" style="font-size:13px"></i></button>`;
@@ -2080,6 +2122,17 @@ function initTechUploadPage(){
   const nameInput=document.getElementById('tech-name');
   const locationInput=document.getElementById('tech-location');
   const sugBox=document.getElementById('tech-suggestions');
+
+  // Add custom companies to brand selector
+  const techBrandSel=document.getElementById('tech-brand');
+  if(techBrandSel){
+    techBrandSel.querySelectorAll('[data-custom]').forEach(o=>o.remove());
+    companies.forEach(co=>{
+      const opt=document.createElement('option');
+      opt.value=co.id;opt.textContent=co.name;opt.setAttribute('data-custom','1');
+      techBrandSel.appendChild(opt);
+    });
+  }
 
   // Restore saved name
   const savedName=localStorage.getItem('gbp_tech_name');
@@ -2828,7 +2881,159 @@ async function hashAllPhotos(){
   toast(`Hashed ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed`:''} — run Scan Dupes to check for matches.`);
 }
 
+// ============================================================
+// COMPANY SYSTEM
+// ============================================================
+const COMPANY_COLORS = [
+  '#E24B4A','#E07B2A','#C4991A','#3B7D3B','#1A6B8A',
+  '#6B3BAA','#AA3B7A','#3B5FAA','#7A5C3B','#3B8A7A'
+];
+const COMPANIES_KEY = 'gbp_companies_v1';
+let companies = []; // [{id, name, color}] — custom ones only, built-ins are separate
+let selectedCompanyColor = COMPANY_COLORS[0];
+
+function loadCompanies(){
+  try{
+    const c = localStorage.getItem(COMPANIES_KEY);
+    if(c) companies = JSON.parse(c);
+  }catch(e){}
+  renderCompanyTabs();
+}
+
+function saveCompanies(){
+  localStorage.setItem(COMPANIES_KEY, JSON.stringify(companies));
+  // Also save to Drive data file
+  save();
+  if(oauthToken) saveToDrive();
+}
+
+function renderCompanyTabs(){
+  const group = document.getElementById('brand-filter-group');
+  if(!group) return;
+  // Remove any existing custom company tabs
+  group.querySelectorAll('[data-company]').forEach(el => el.remove());
+  // Add a tab for each custom company
+  companies.forEach(co => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn';
+    btn.setAttribute('data-brand', co.id);
+    btn.setAttribute('data-company', co.id);
+    btn.textContent = co.name;
+    btn.style.setProperty('--company-color', co.color);
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      btn.style.background = co.color;
+      btn.style.color = '#fff';
+      btn.style.borderColor = 'transparent';
+      activeBrand = co.id;
+      applyFilters();
+    });
+    // Add active style for company
+    if(activeBrand === co.id){
+      btn.classList.add('active');
+      btn.style.background = co.color;
+      btn.style.color = '#fff';
+      btn.style.borderColor = 'transparent';
+    }
+    group.appendChild(btn);
+  });
+  // Update brandColors and brandLabels with custom companies
+  companies.forEach(co => {
+    brandColors[co.id] = co.color;
+    brandLabels[co.id] = co.name;
+  });
+}
+
+function showCompanyModal(){
+  renderCompanyList();
+  renderColorPicker();
+  document.getElementById('company-overlay').style.display = 'flex';
+}
+
+function hideCompanyModal(){
+  document.getElementById('company-overlay').style.display = 'none';
+  document.getElementById('new-company-name').value = '';
+}
+
+function renderCompanyList(){
+  const list = document.getElementById('company-list');
+  if(!list) return;
+  if(!companies.length){
+    list.innerHTML = '<div style="font-size:12px;color:var(--text-tertiary);text-align:center;padding:8px">No custom companies yet.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  companies.forEach(co => {
+    const count = photos.filter(p => p.brand === co.id).length;
+    const item = document.createElement('div');
+    item.className = 'company-list-item';
+    item.innerHTML = `
+      <div class="company-list-dot" style="background:${co.color}"></div>
+      <div class="company-list-name">${co.name}</div>
+      <div class="company-list-count">${count} photo${count!==1?'s':''}</div>
+      <button class="btn-company-delete" onclick="deleteCompany('${co.id}')" title="Remove">
+        <i class="ti ti-trash" style="font-size:13px"></i>
+      </button>`;
+    list.appendChild(item);
+  });
+}
+
+function renderColorPicker(){
+  const picker = document.getElementById('color-picker');
+  if(!picker) return;
+  picker.innerHTML = '';
+  COMPANY_COLORS.forEach(color => {
+    const swatch = document.createElement('div');
+    swatch.className = 'color-swatch' + (color === selectedCompanyColor ? ' selected' : '');
+    swatch.style.background = color;
+    swatch.onclick = () => {
+      selectedCompanyColor = color;
+      picker.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+      swatch.classList.add('selected');
+    };
+    picker.appendChild(swatch);
+  });
+}
+
+window.addCompany = function(){
+  const name = document.getElementById('new-company-name').value.trim();
+  if(!name){ alert('Please enter a company name.'); return; }
+  const id = 'company_' + Date.now();
+  companies.push({ id, name, color: selectedCompanyColor });
+  brandColors[id] = selectedCompanyColor;
+  brandLabels[id] = name;
+  saveCompanies();
+  renderCompanyTabs();
+  renderCompanyList();
+  document.getElementById('new-company-name').value = '';
+  // Pick next unused color
+  const usedColors = companies.map(c => c.color);
+  selectedCompanyColor = COMPANY_COLORS.find(c => !usedColors.includes(c)) || COMPANY_COLORS[0];
+  renderColorPicker();
+  toast(`"${name}" added — it now appears as a filter tab.`);
+};
+
+window.deleteCompany = function(id){
+  const co = companies.find(c => c.id === id);
+  if(!co) return;
+  const count = photos.filter(p => p.brand === id).length;
+  if(count > 0){
+    if(!confirm(`"${co.name}" has ${count} photo${count!==1?'s':''} on the map. Delete the company tab? Photos stay on the map but lose their company color.`)) return;
+  }
+  companies = companies.filter(c => c.id !== id);
+  saveCompanies();
+  renderCompanyTabs();
+  renderCompanyList();
+  if(activeBrand === id){ activeBrand = 'all'; applyFilters(); }
+  toast(`"${co.name}" removed.`);
+};
+
+// Save companies in Drive data
+const _origGetStateData = getStateData;
+
 loadConfig();load();loadPickerApi();
+loadCompanies();
 // Update review badge on load
 setTimeout(updateReviewBadge,100);
 // Show tech upload page if ?upload in URL
