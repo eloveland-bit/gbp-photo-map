@@ -30,12 +30,14 @@
   #app{display:flex;flex-direction:column;height:100vh;}
   #toolbar{
     display:flex;align-items:center;gap:6px;
-    padding:8px 14px;
+    padding:0 14px;
     border-bottom:0.5px solid var(--border-light);
     background:var(--bg-primary);
-    flex-wrap:wrap;flex-shrink:0;
-    min-height:48px;
+    flex-wrap:nowrap;flex-shrink:0;
+    height:48px;overflow-x:auto;overflow-y:visible;
+    scrollbar-width:none;-ms-overflow-style:none;
   }
+  #toolbar::-webkit-scrollbar{display:none;}
   .tb-group{display:flex;align-items:center;gap:5px;flex-shrink:0;}
   .filter-btn{font-size:11px;padding:3px 9px;border-radius:20px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;transition:all 0.15s;font-family:var(--font);white-space:nowrap;}
   .filter-btn.active{border-color:transparent;color:#fff;}
@@ -61,7 +63,7 @@
   .company-list-count{font-size:11px;color:var(--text-tertiary);}
   .btn-company-delete{background:none;border:none;cursor:pointer;color:var(--text-tertiary);font-size:14px;padding:2px;}
   .btn-company-delete:hover{color:var(--red);}
-  .toolbar-right{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .toolbar-right{margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0;}
   #stats{font-size:11px;color:var(--text-secondary);white-space:nowrap;}
   #last-upload{font-size:10px;color:var(--text-tertiary);white-space:nowrap;}
   .toggle-used{font-size:11px;padding:3px 9px;border-radius:20px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;font-family:var(--font);white-space:nowrap;}
@@ -343,7 +345,7 @@
       <button class="toggle-used marketer-only" id="toggle-used-btn">Show used</button>
       <div class="marketer-only" style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);">
         <i class="ti ti-calendar" style="font-size:13px"></i>
-        <select id="date-filter" style="font-size:11px;padding:2px 5px;border-radius:6px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;font-family:var(--font);" onchange="applyDateFilter()">
+        <select id="date-filter" style="font-size:11px;padding:2px 5px;border-radius:6px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;font-family:var(--font);" onchange="applyDateFilter()" title="Filters to photos accepted/pinned within this window. Older photos without dates are hidden when a date filter is active.">
           <option value="all">All time</option>
           <option value="7">Last 7 days</option>
           <option value="30">Last 30 days</option>
@@ -357,9 +359,7 @@
         <i class="ti ti-inbox"></i> Review
         <span id="review-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;">0</span>
       </button>
-      <button class="icon-btn marketer-only" onclick="toggleMarketStats()" id="market-stats-btn" title="Photo count by market">
-        <i class="ti ti-chart-bar"></i>
-      </button>
+
       <button class="icon-btn marketer-only" id="dup-scan-btn" onclick="openDupScanPanel()" style="position:relative">
         <i class="ti ti-copy-off"></i> Dupes
         <span id="dup-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;">0</span>
@@ -685,7 +685,7 @@ function hideLoading(){document.getElementById('loading-overlay').style.display=
 // Serialize current state
 function getStateData(){
   return {
-    photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null,acceptedAt:p.acceptedAt||null,geotagged:p.geotagged||false})),
+    photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null,acceptedAt:p.acceptedAt||null,pinnedAt:p.pinnedAt||null,geotagged:p.geotagged||false})),
     pending: pending.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,driveId:p.driveId||null})),
     techReview: techReview.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null,coords:p.coords||null,submittedBy:p.submittedBy||null,submittedAt:p.submittedAt||null})),
     deletedIds: Array.from(deletedIds)
@@ -1121,8 +1121,10 @@ function isWithinDateFilter(p){
   const days=parseInt(activeDateFilter);
   const cutoff=new Date();
   cutoff.setDate(cutoff.getDate()-days);
-  const dateStr=p.acceptedAt||p.submittedAt||null;
-  if(!dateStr)return true;
+  // Use any date we have
+  const dateStr=p.acceptedAt||p.submittedAt||p.pinnedAt||null;
+  // If no date at all, exclude from date-filtered views so filter actually works
+  if(!dateStr)return false;
   return new Date(dateStr)>=cutoff;
 }
 
@@ -2036,7 +2038,7 @@ async function geotagDriveFile(driveId, lat, lng, filename) {
 function pinPendingWith(id,coords,brand){
   const pIdx=pending.findIndex(x=>x.id===id);if(pIdx===-1)return;
   const p=pending[pIdx];
-  const photo={id:p.id,name:p.name,lat:coords.lat,lng:coords.lng,brand,used:false,thumb:p.thumb,driveId:p.driveId||null,manual:true};
+  const photo={id:p.id,name:p.name,lat:coords.lat,lng:coords.lng,brand,used:false,thumb:p.thumb,driveId:p.driveId||null,manual:true,pinnedAt:new Date().toISOString()};
   photos.push(photo);pending.splice(pIdx,1);
   addMarker(photo);map.setView([coords.lat,coords.lng],14);
   // Update localStorage immediately so sync can't restore the old pending list
