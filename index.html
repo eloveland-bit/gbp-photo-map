@@ -378,6 +378,9 @@
           <button class="tools-menu-item" id="hash-btn" onclick="hashAllPhotos();toggleToolsMenu()">
             <i class="ti ti-fingerprint"></i> Hash All
           </button>
+          <button class="tools-menu-item" id="backfill-btn" onclick="backfillDates();toggleToolsMenu()">
+            <i class="ti ti-calendar-plus"></i> Backfill Dates
+          </button>
           <hr class="tools-menu-divider">
           <button class="tools-menu-item" onclick="exportCSV();toggleToolsMenu()">
             <i class="ti ti-download"></i> Export CSV
@@ -1122,7 +1125,7 @@ function isWithinDateFilter(p){
   const cutoff=new Date();
   cutoff.setDate(cutoff.getDate()-days);
   // Use any date we have
-  const dateStr=p.acceptedAt||p.submittedAt||p.pinnedAt||null;
+  const dateStr=p.acceptedAt||p.pinnedAt||p.submittedAt||null;
   // If no date at all, exclude from date-filtered views so filter actually works
   if(!dateStr)return false;
   return new Date(dateStr)>=cutoff;
@@ -1143,14 +1146,19 @@ function updateLastUpload(){
   const el=document.getElementById('last-upload');
   if(!el)return;
   if(!photos.length){el.textContent='';return;}
-  const withDates=photos.filter(p=>p.acceptedAt);
+  const withDates=photos.filter(p=>p.acceptedAt||p.pinnedAt||p.submittedAt);
   if(withDates.length>0){
-    withDates.sort((a,b)=>new Date(b.acceptedAt)-new Date(a.acceptedAt));
-    const d=new Date(withDates[0].acceptedAt);
+    withDates.sort((a,b)=>{
+      const da=new Date(b.acceptedAt||b.pinnedAt||b.submittedAt||0);
+      const db=new Date(a.acceptedAt||a.pinnedAt||a.submittedAt||0);
+      return da-db;
+    });
+    const latest=withDates[0];
+    const dateStr=latest.acceptedAt||latest.pinnedAt||latest.submittedAt;
+    const d=new Date(dateStr);
     el.textContent=`Last upload: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`;
   }else{
-    // No acceptedAt yet — show total count as placeholder
-    el.textContent=`${photos.length} photo${photos.length!==1?'s':''} on map · upload date tracked going forward`;
+    el.textContent=`Tools → Backfill Dates to enable date filter`;
   }
 }
 function checkNoPhotos(){
@@ -3269,6 +3277,54 @@ function toggleMarketStats(){
     body.appendChild(hint);
   }
   panel.classList.add('visible');
+}
+
+// Backfill Drive creation dates for all photos missing a timestamp
+async function backfillDates(){
+  if(!oauthToken){toast('Sign in first — click Sync.');return;}
+  const toFetch=photos.filter(p=>p.driveId&&!p.acceptedAt&&!p.pinnedAt&&!p.submittedAt);
+  if(!toFetch.length){
+    toast('All photos already have dates!');return;
+  }
+  const btn=document.getElementById('backfill-btn');
+  if(btn){btn.style.opacity='0.5';btn.style.pointerEvents='none';}
+  showLoading(`Fetching dates for ${toFetch.length} photo${toFetch.length!==1?'s':''}...`);
+  let done=0,failed=0;
+  // Batch requests — fetch metadata 10 at a time using Drive batch or individual calls
+  for(let i=0;i<toFetch.length;i++){
+    const p=toFetch[i];
+    updateLoadingProgress(`${i+1} of ${toFetch.length} — ${p.name}`);
+    try{
+      const resp=await fetch(
+        `https://www.googleapis.com/drive/v3/files/${p.driveId}?fields=createdTime,modifiedTime&supportsAllDrives=true`,
+        {headers:{Authorization:`Bearer ${oauthToken}`}}
+      );
+      if(!resp.ok){failed++;continue;}
+      const data=await resp.json();
+      // Use createdTime as the upload date
+      if(data.createdTime){
+        p.pinnedAt=data.createdTime;
+        done++;
+      }
+    }catch(e){
+      console.error('Date fetch failed for',p.name,e);
+      failed++;
+    }
+    // Save progress every 25 photos
+    if((i+1)%25===0){
+      save();
+      if(oauthToken)saveToDrive();
+    }
+  }
+  // Final save
+  save();
+  if(oauthToken)await saveToDrive();
+  hideLoading();
+  if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
+  toast(`Dated ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed`:''} — date filter now covers all photos.`);
+  // Refresh filters
+  applyFilters();
+  updateStats();
 }
 
 loadConfig();load();loadPickerApi();
