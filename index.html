@@ -169,6 +169,27 @@
   #latest-banner-meta{font-size:11px;color:var(--text-secondary);margin-top:1px;}
   #latest-banner-close{background:none;border:none;cursor:pointer;color:var(--text-tertiary);font-size:16px;padding:4px;flex-shrink:0;}
   #latest-banner-close:hover{color:var(--text-primary);}
+  /* Duplicate scanner panel */
+  #dup-scan-panel{position:fixed;top:0;right:-440px;width:420px;height:100vh;background:var(--bg-primary);border-left:0.5px solid var(--border-mid);z-index:1000;transition:right 0.3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.1);}
+  #dup-scan-panel.open{right:0;}
+  #dup-scan-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:0.5px solid var(--border-light);flex-shrink:0;}
+  #dup-scan-header h3{font-size:15px;font-weight:500;}
+  #dup-scan-close{background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:18px;padding:4px;}
+  #dup-scan-body{flex:1;overflow-y:auto;padding:16px;}
+  #dup-scan-empty{text-align:center;padding:48px 20px;color:var(--text-secondary);}
+  #dup-scan-empty i{font-size:40px;color:var(--text-tertiary);display:block;margin-bottom:12px;}
+  .dup-pair{background:var(--bg-secondary);border-radius:var(--radius-md);border:0.5px solid var(--border-light);overflow:hidden;margin-bottom:16px;}
+  .dup-pair-header{padding:8px 12px;font-size:11px;color:var(--text-tertiary);background:var(--bg-tertiary);border-bottom:0.5px solid var(--border-light);}
+  .dup-pair-photos{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+  .dup-photo{padding:10px;}
+  .dup-photo:first-child{border-right:0.5px solid var(--border-light);}
+  .dup-photo img{width:100%;height:100px;object-fit:cover;border-radius:6px;display:block;cursor:zoom-in;margin-bottom:6px;}
+  .dup-photo-name{font-size:11px;color:var(--text-secondary);word-break:break-all;margin-bottom:4px;}
+  .dup-photo-brand{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;color:#fff;margin-bottom:6px;}
+  .dup-photo-coords{font-size:10px;color:var(--text-tertiary);font-family:var(--font-mono);margin-bottom:8px;}
+  .btn-dup-keep{width:100%;font-size:12px;padding:5px;border-radius:6px;background:var(--green);color:#fff;border:none;cursor:pointer;font-family:var(--font);}
+  .btn-dup-keep:hover{background:#2d5509;}
+  .btn-dup-skip-pair{width:100%;font-size:11px;padding:4px;border-radius:6px;background:var(--bg-primary);color:var(--text-secondary);border:0.5px solid var(--border-mid);cursor:pointer;font-family:var(--font);margin-top:8px;}
   /* Review panel */
   #review-panel{position:fixed;top:0;right:-400px;width:380px;height:100vh;background:var(--bg-primary);border-left:0.5px solid var(--border-mid);z-index:1000;transition:right 0.3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.1);}
   #review-panel.open{right:0;}
@@ -280,13 +301,19 @@
         <i class="ti ti-inbox"></i> Review
         <span id="review-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;">0</span>
       </button>
-      <button class="icon-btn marketer-only" id="sort-btn" onclick="sortExistingPhotos()" title="Move existing photos to their market subfolders in Drive">
+      <button class="icon-btn marketer-only" id="dup-scan-btn" onclick="openDupScanPanel()" title="Scan all map photos for duplicates">
+        <i class="ti ti-copy-off"></i> Scan Dupes
+      </button>
+      <button class="icon-btn marketer-only" id="sort-btn" onclick="sortExistingPhotos()"  title="Move existing photos to their market subfolders in Drive">
         <i class="ti ti-folders"></i> Sort Drive
       </button>
       <button class="icon-btn marketer-only" id="geotag-btn" onclick="geotagAllPhotos()" title="Write GPS coordinates into all existing Drive photos">
         <i class="ti ti-map-pin-bolt"></i> Geotag All
       </button>
-      <button class="icon-btn marketer-only" id="sort-btn" onclick="sortExistingPhotos()" title="Move existing photos to their market subfolders in Drive">
+      <button class="icon-btn marketer-only" id="dup-scan-btn" onclick="openDupScanPanel()" title="Scan all map photos for duplicates">
+        <i class="ti ti-copy-off"></i> Scan Dupes
+      </button>
+      <button class="icon-btn marketer-only" id="sort-btn" onclick="sortExistingPhotos()"  title="Move existing photos to their market subfolders in Drive">
         <i class="ti ti-folders"></i> Sort Drive
       </button>
       <button class="icon-btn marketer-only" id="geotag-btn" onclick="geotagAllPhotos()" title="Write GPS coordinates into all existing Drive photos">
@@ -392,6 +419,20 @@
     <div id="review-empty">
       <i class="ti ti-check"></i>
       All caught up — no photos waiting for review.
+    </div>
+  </div>
+</div>
+
+<!-- Duplicate scanner panel -->
+<div id="dup-scan-panel">
+  <div id="dup-scan-header">
+    <h3>Duplicate Scanner <span id="dup-scan-count" style="color:var(--text-tertiary);font-weight:400;font-size:13px"></span></h3>
+    <button id="dup-scan-close" onclick="closeDupScanPanel()"><i class="ti ti-x"></i></button>
+  </div>
+  <div id="dup-scan-body">
+    <div id="dup-scan-empty">
+      <i class="ti ti-copy-off"></i>
+      Click Scan to check all photos for duplicates.
     </div>
   </div>
 </div>
@@ -2609,6 +2650,123 @@ async function sortExistingPhotos(){
   if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
   toast(`Sorted ${moved} photo${moved!==1?'s':''}${skipped>0?` · ${skipped} no market match`:''}${failed>0?` · ${failed} failed`:''}.`);
 }
+
+// Duplicate scanner
+function openDupScanPanel(){
+  document.getElementById('dup-scan-panel').classList.add('open');
+  runDupScan();
+}
+function closeDupScanPanel(){
+  document.getElementById('dup-scan-panel').classList.remove('open');
+}
+
+function runDupScan(){
+  const body=document.getElementById('dup-scan-body');
+  const countEl=document.getElementById('dup-scan-count');
+  body.innerHTML='<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;"><i class="ti ti-loader" style="font-size:24px;display:block;margin-bottom:8px"></i>Scanning...</div>';
+
+  // Find all duplicate pairs using perceptual hash
+  const pairs=[];
+  const seen=new Set();
+  const photosWithHash=photos.filter(p=>p.hash&&p.lat&&p.lng);
+
+  for(let i=0;i<photosWithHash.length;i++){
+    for(let j=i+1;j<photosWithHash.length;j++){
+      const a=photosWithHash[i],b=photosWithHash[j];
+      const pairKey=[a.id,b.id].sort().join('|');
+      if(seen.has(pairKey))continue;
+      if(hashDistance(a.hash,b.hash)<=5){
+        seen.add(pairKey);
+        pairs.push([a,b]);
+      }
+    }
+  }
+
+  if(!pairs.length){
+    countEl.textContent='';
+    body.innerHTML=`<div id="dup-scan-empty"><i class="ti ti-check" style="font-size:40px;color:var(--text-tertiary);display:block;margin-bottom:12px"></i>No duplicates found among ${photosWithHash.length} photos with hash data.<br><br><span style="font-size:12px;color:var(--text-tertiary)">Note: photos without hash data (uploaded before this feature) are not checked.</span></div>`;
+    return;
+  }
+
+  countEl.textContent=`(${pairs.length} pair${pairs.length!==1?'s':''} found)`;
+  body.innerHTML='';
+
+  pairs.forEach(([a,b],idx)=>{
+    const div=document.createElement('div');
+    div.className='dup-pair';
+    div.id=`dup-pair-${idx}`;
+    const aColor=brandColors[a.brand]||'#444';
+    const bColor=brandColors[b.brand]||'#444';
+    const aLabel=brandLabels[a.brand]||a.brand;
+    const bLabel=brandLabels[b.brand]||b.brand;
+    const aCoords=`${parseFloat(a.lat).toFixed(4)}, ${parseFloat(a.lng).toFixed(4)}`;
+    const bCoords=`${parseFloat(b.lat).toFixed(4)}, ${parseFloat(b.lng).toFixed(4)}`;
+    div.innerHTML=`
+      <div class="dup-pair-header">Duplicate pair ${idx+1}</div>
+      <div class="dup-pair-photos">
+        <div class="dup-photo">
+          ${a.thumb?`<img src="${a.thumb}" alt="${a.name}" onclick="openLightboxUrl('${a.thumb}')">` : '<div style="height:100px;background:var(--bg-tertiary);border-radius:6px;margin-bottom:6px"></div>'}
+          <div class="dup-photo-name">${a.name}</div>
+          <span class="dup-photo-brand" style="background:${aColor}">${aLabel}</span>
+          <div class="dup-photo-coords">${aCoords}</div>
+          <button class="btn-dup-keep" onclick="keepPhoto('${a.id}','${b.id}',${idx})">Keep this one</button>
+        </div>
+        <div class="dup-photo">
+          ${b.thumb?`<img src="${b.thumb}" alt="${b.name}" onclick="openLightboxUrl('${b.thumb}')">` : '<div style="height:100px;background:var(--bg-tertiary);border-radius:6px;margin-bottom:6px"></div>'}
+          <div class="dup-photo-name">${b.name}</div>
+          <span class="dup-photo-brand" style="background:${bColor}">${bLabel}</span>
+          <div class="dup-photo-coords">${bCoords}</div>
+          <button class="btn-dup-keep" onclick="keepPhoto('${b.id}','${a.id}',${idx})">Keep this one</button>
+        </div>
+      </div>
+      <div style="padding:8px 10px;border-top:0.5px solid var(--border-light);">
+        <button class="btn-dup-skip-pair" onclick="skipDupPair(${idx})">Skip — keep both</button>
+      </div>`;
+    body.appendChild(div);
+  });
+}
+
+window.keepPhoto=async function(keepId,removeId,pairIdx){
+  const toRemove=photos.find(p=>p.id===removeId);
+  if(!toRemove)return;
+  if(!confirm(`Remove "${toRemove.name}" from the map and Drive?`))return;
+  // Remove from Drive
+  if(toRemove.driveId&&oauthToken){
+    try{
+      await fetch(`https://www.googleapis.com/drive/v3/files/${toRemove.driveId}?supportsAllDrives=true`,{
+        method:'DELETE',headers:{Authorization:`Bearer ${oauthToken}`}
+      });
+    }catch(e){
+      try{
+        await fetch(`https://www.googleapis.com/drive/v3/files/${toRemove.driveId}?supportsAllDrives=true`,{
+          method:'PATCH',headers:{Authorization:`Bearer ${oauthToken}`,'Content-Type':'application/json'},
+          body:JSON.stringify({trashed:true})
+        });
+      }catch(e2){}
+    }
+  }
+  // Remove from map
+  deletedIds.add(toRemove.id);
+  if(toRemove.driveId)deletedIds.add(toRemove.driveId);
+  const idx=photos.findIndex(p=>p.id===removeId);
+  if(idx!==-1){
+    const key=locKey(photos[idx]);
+    delete markers[removeId];
+    photos.splice(idx,1);
+    rebuildLocMarker(key);
+  }
+  save();if(oauthToken)await saveToDrive();
+  updateStats();
+  // Remove pair card
+  const card=document.getElementById(`dup-pair-${pairIdx}`);
+  if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>card.remove(),300);}
+  toast('Duplicate removed from map and Drive.');
+};
+
+window.skipDupPair=function(idx){
+  const card=document.getElementById(`dup-pair-${idx}`);
+  if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>card.remove(),300);}
+};
 
 loadConfig();load();loadPickerApi();
 // Update review badge on load
