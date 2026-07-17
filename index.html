@@ -116,6 +116,7 @@
   .photo-card-divider{border-top:0.5px solid rgba(0,0,0,0.1);margin:10px 0;}
   .popup-img{width:100%;height:130px;object-fit:cover;border-radius:6px;display:block;margin-bottom:8px;cursor:zoom-in;}
   .popup-name{font-size:12px;font-weight:500;color:#1a1a18;word-break:break-all;margin-bottom:5px;}
+  .popup-dup-warning{font-size:11px;background:#FFF3CD;color:#856404;border:0.5px solid #FFECB5;border-radius:6px;padding:4px 8px;margin-bottom:6px;display:flex;align-items:center;gap:5px;}
   .popup-desc{font-size:12px;color:#6b6b67;margin-bottom:6px;line-height:1.5;font-style:italic;}
   .popup-desc-empty{font-size:11px;color:#9b9b97;margin-bottom:6px;cursor:pointer;text-decoration:underline;display:inline-block;}
   .popup-desc-edit{width:100%;font-size:12px;padding:5px 7px;border-radius:6px;border:0.5px solid rgba(0,0,0,0.2);font-family:var(--font);resize:none;margin-bottom:5px;background:#fff;color:#1a1a18;}
@@ -274,9 +275,16 @@
     <div class="toolbar-right">
       <button class="toggle-used marketer-only" id="toggle-used-btn">Show used</button>
       <span id="stats" class="marketer-only">0 unused · 0 used</span>
+      <span id="last-upload" class="marketer-only" style="font-size:11px;color:var(--text-tertiary);white-space:nowrap;"></span>
       <button class="icon-btn marketer-only" id="review-btn" onclick="toggleReviewPanel()" style="position:relative">
         <i class="ti ti-inbox"></i> Review
         <span id="review-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;">0</span>
+      </button>
+      <button class="icon-btn marketer-only" id="sort-btn" onclick="sortExistingPhotos()" title="Move existing photos to their market subfolders in Drive">
+        <i class="ti ti-folders"></i> Sort Drive
+      </button>
+      <button class="icon-btn marketer-only" id="geotag-btn" onclick="geotagAllPhotos()" title="Write GPS coordinates into all existing Drive photos">
+        <i class="ti ti-map-pin-bolt"></i> Geotag All
       </button>
       <button class="icon-btn marketer-only" id="sort-btn" onclick="sortExistingPhotos()" title="Move existing photos to their market subfolders in Drive">
         <i class="ti ti-folders"></i> Sort Drive
@@ -535,7 +543,7 @@ function hideLoading(){document.getElementById('loading-overlay').style.display=
 // Serialize current state
 function getStateData(){
   return {
-    photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null})),
+    photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null,acceptedAt:p.acceptedAt||null,geotagged:p.geotagged||false})),
     pending: pending.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,driveId:p.driveId||null})),
     techReview: techReview.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null,coords:p.coords||null,submittedBy:p.submittedBy||null,submittedAt:p.submittedAt||null})),
     deletedIds: Array.from(deletedIds)
@@ -759,8 +767,23 @@ function buildPhotoCard(p){
   let html=`<div class="photo-card">`;
   if(p.thumb)html+=`<img class="popup-img" src="${p.thumb}" alt="${p.name}" onclick="openLightbox('${p.id}')">`;
   html+=`<div class="popup-name">${p.name}</div>`;
-  html+=`<div class="popup-badges"><span class="popup-brand-badge" style="background:${color}">${label}</span>`;
+  // Check for duplicates among OTHER photos on the map
+  if(p.hash){
+    const dups=photos.filter(other=>other.id!==p.id&&other.hash&&hashDistance(other.hash,p.hash)<=5);
+    if(dups.length>0){
+      html+=`<div class="popup-dup-warning"><i class="ti ti-alert-triangle" style="font-size:12px"></i> Possible duplicate of ${dups.map(d=>`<strong>${d.name}</strong>`).join(', ')}</div>`;
+    }
+  }
+  html+=`<div class="popup-badges" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+    <span class="popup-brand-badge" style="background:${color}">${label}</span>`;
   if(p.manual)html+=`<span class="popup-source-tag">manual pin</span>`;
+  if(!isTechMode&&!isViewMode){
+    html+=`<select class="popup-brand-select" onchange="changeBrand('${p.id}',this.value)" style="font-size:11px;padding:2px 5px;border-radius:6px;border:0.5px solid rgba(0,0,0,0.2);background:#fff;color:#1a1a18;cursor:pointer;font-family:var(--font);">
+      <option value="mosquito" ${p.brand==='mosquito'?'selected':''}>Mosquito Squad</option>
+      <option value="lawn" ${p.brand==='lawn'?'selected':''}>Lawn Squad</option>
+      <option value="newage" ${p.brand==='newage'?'selected':''}>New Age Lights</option>
+    </select>`;
+  }
   html+=`</div>`;
   // Description
   if(p.desc){
@@ -906,12 +929,12 @@ function rebuildLocMarker(key){
   const brand=getPrimaryBrand(ps);
   if(locMarkers[key]){
     locMarkers[key].setIcon(makeIcon(ps,brand));
-    locMarkers[key].setPopupContent(buildPopup(ps));
+    locMarkers[key].setPopupContent(()=>buildPopup(getPhotosAtLoc(key)));
     if(visible&&!map.hasLayer(locMarkers[key]))locMarkers[key].addTo(map);
     if(!visible&&map.hasLayer(locMarkers[key]))map.removeLayer(locMarkers[key]);
   }else{
     const marker=L.marker([ps[0].lat,ps[0].lng],{icon:makeIcon(ps,brand)})
-      .bindPopup(buildPopup(ps),{maxWidth:280,minWidth:250});
+      .bindPopup(()=>buildPopup(getPhotosAtLoc(key)),{maxWidth:280,minWidth:250});
     if(visible)marker.addTo(map);
     locMarkers[key]=marker;
   }
@@ -934,6 +957,21 @@ function updateStats(){
   const unused=photos.filter(p=>!p.used).length,used=photos.filter(p=>p.used).length;
   document.getElementById('stats').textContent=`${unused} unused · ${used} used`;
   checkNoPhotos();
+  updateLastUpload();
+}
+function updateLastUpload(){
+  const el=document.getElementById('last-upload');
+  if(!el)return;
+  if(!photos.length){el.textContent='';return;}
+  const withDates=photos.filter(p=>p.acceptedAt);
+  if(withDates.length>0){
+    withDates.sort((a,b)=>new Date(b.acceptedAt)-new Date(a.acceptedAt));
+    const d=new Date(withDates[0].acceptedAt);
+    el.textContent=`Last upload: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`;
+  }else{
+    // No acceptedAt yet — show total count as placeholder
+    el.textContent=`${photos.length} photo${photos.length!==1?'s':''} on map · upload date tracked going forward`;
+  }
 }
 function checkNoPhotos(){
   document.getElementById('no-photos').style.display=(photos.length===0&&pending.length===0)?'block':'none';
@@ -1833,7 +1871,7 @@ function pinPendingWith(id,coords,brand){
   // Write GPS EXIF into the Drive file in the background
   if(photo.driveId&&oauthToken){
     geotagDriveFile(photo.driveId,coords.lat,coords.lng,photo.name)
-      .then(()=>toast('Photo geotagged in Drive.'))
+      .then(()=>{photo.geotagged=true;save();toast('Photo geotagged in Drive.');})
       .catch(()=>{});
   }
   renderPendingPanel();updateStats();
@@ -1893,6 +1931,17 @@ window.editDesc=function(id){
   const wrap=document.getElementById(`desc-edit-${id}`);
   if(wrap)wrap.style.display=wrap.style.display==='none'?'block':'none';
 };
+window.changeBrand=function(id,newBrand){
+  const p=photos.find(x=>x.id===id);if(!p)return;
+  const oldKey=locKey(p);
+  p.brand=newBrand;
+  save();
+  if(oauthToken)saveToDrive();
+  rebuildLocMarker(oldKey);
+  map.closePopup();
+  toast('Brand updated.');
+};
+
 window.saveDesc=function(id){
   const p=photos.find(x=>x.id===id);if(!p)return;
   const input=document.getElementById(`desc-input-${id}`);
@@ -2364,7 +2413,7 @@ window.acceptReview=async function(id){
     }catch(e){console.error('Move failed:',e);}
   }
   if(p.coords){
-    const photo={id:p.id,name:p.name,lat:p.coords.lat,lng:p.coords.lng,brand:p.brand,used:false,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,manual:false,market:p.market||'Unknown'};
+    const photo={id:p.id,name:p.name,lat:p.coords.lat,lng:p.coords.lng,brand:p.brand,used:false,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,manual:false,market:p.market||'Unknown',acceptedAt:new Date().toISOString()};
     photos.push(photo);addMarker(photo);refreshMarker(photo);
   }else{
     pending.push({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null});
@@ -2416,6 +2465,150 @@ window.denyReview=async function(id){
   if(countEl&&techReview.length)countEl.textContent=`(${techReview.length})`;
   toast('Photo denied — marked in Drive.');
 };
+
+// Write GPS coordinates into JPEG EXIF data
+async function writeExifGps(blob, lat, lng) {
+  try {
+    const buf = await blob.arrayBuffer();
+    const data = new Uint8Array(buf);
+    if (data[0] !== 0xFF || data[1] !== 0xD8) return blob;
+    function toRational(val) {
+      val = Math.abs(val);
+      const deg = Math.floor(val);
+      const minFull = (val - deg) * 60;
+      const min = Math.floor(minFull);
+      const sec = Math.round((minFull - min) * 60 * 100);
+      return { deg, min, sec };
+    }
+    const latR = toRational(lat);
+    const lngR = toRational(lng);
+    const latRef = lat >= 0 ? 0x4E : 0x53;
+    const lngRef = lng >= 0 ? 0x45 : 0x57;
+    const EXIF_HEADER = [0x45,0x78,0x69,0x66,0x00,0x00];
+    const ifd0EntryCount = 1;
+    const ifd0Size = 2 + ifd0EntryCount * 12 + 4;
+    const gpsIfdOffset = 8 + ifd0Size;
+    const gpsEntryCount = 4;
+    const gpsIfdSize = 2 + gpsEntryCount * 12 + 4;
+    const gpsDataOffset = gpsIfdOffset + gpsIfdSize;
+    const totalTiff = gpsDataOffset + 52;
+    const tiff = new Uint8Array(totalTiff);
+    tiff[0]=0x49;tiff[1]=0x49;tiff[2]=0x2A;tiff[3]=0x00;
+    tiff[4]=8;tiff[5]=0;tiff[6]=0;tiff[7]=0;
+    tiff[8]=1;tiff[9]=0;
+    tiff[10]=0x25;tiff[11]=0x88;tiff[12]=4;tiff[13]=0;
+    tiff[14]=1;tiff[15]=0;tiff[16]=0;tiff[17]=0;
+    tiff[18]=gpsIfdOffset&0xFF;tiff[19]=(gpsIfdOffset>>8)&0xFF;tiff[20]=0;tiff[21]=0;
+    tiff[22]=0;tiff[23]=0;tiff[24]=0;tiff[25]=0;
+    let g=gpsIfdOffset;
+    tiff[g]=gpsEntryCount;tiff[g+1]=0;g+=2;
+    function gpsEntry(tag,type,count,off){
+      tiff[g]=tag&0xFF;tiff[g+1]=(tag>>8)&0xFF;
+      tiff[g+2]=type&0xFF;tiff[g+3]=0;
+      tiff[g+4]=count&0xFF;tiff[g+5]=0;tiff[g+6]=0;tiff[g+7]=0;
+      tiff[g+8]=off&0xFF;tiff[g+9]=(off>>8)&0xFF;tiff[g+10]=0;tiff[g+11]=0;
+      g+=12;
+    }
+    const latRefOff=gpsDataOffset,lngRefOff=gpsDataOffset+2,latOff=gpsDataOffset+4,lngOff=gpsDataOffset+28;
+    gpsEntry(0x0001,2,2,latRefOff);gpsEntry(0x0002,5,3,latOff);
+    gpsEntry(0x0003,2,2,lngRefOff);gpsEntry(0x0004,5,3,lngOff);
+    tiff[g]=0;tiff[g+1]=0;tiff[g+2]=0;tiff[g+3]=0;
+    tiff[latRefOff]=latRef;tiff[latRefOff+1]=0;
+    tiff[lngRefOff]=lngRef;tiff[lngRefOff+1]=0;
+    function writeRational(arr,off,r){
+      arr[off]=r.deg&0xFF;arr[off+1]=(r.deg>>8)&0xFF;arr[off+2]=(r.deg>>16)&0xFF;arr[off+3]=(r.deg>>24)&0xFF;
+      arr[off+4]=1;arr[off+5]=0;arr[off+6]=0;arr[off+7]=0;
+      arr[off+8]=r.min&0xFF;arr[off+9]=(r.min>>8)&0xFF;arr[off+10]=(r.min>>16)&0xFF;arr[off+11]=(r.min>>24)&0xFF;
+      arr[off+12]=1;arr[off+13]=0;arr[off+14]=0;arr[off+15]=0;
+      arr[off+16]=r.sec&0xFF;arr[off+17]=(r.sec>>8)&0xFF;arr[off+18]=(r.sec>>16)&0xFF;arr[off+19]=(r.sec>>24)&0xFF;
+      arr[off+20]=100;arr[off+21]=0;arr[off+22]=0;arr[off+23]=0;
+    }
+    writeRational(tiff,latOff,latR);writeRational(tiff,lngOff,lngR);
+    const exifPayload=new Uint8Array(EXIF_HEADER.length+tiff.length);
+    exifPayload.set(EXIF_HEADER,0);exifPayload.set(tiff,EXIF_HEADER.length);
+    const app1Len=exifPayload.length+2;
+    const app1=new Uint8Array(4+exifPayload.length);
+    app1[0]=0xFF;app1[1]=0xE1;app1[2]=(app1Len>>8)&0xFF;app1[3]=app1Len&0xFF;
+    app1.set(exifPayload,4);
+    let insertAt=2,i=2;
+    while(i<data.length-1){
+      if(data[i]!==0xFF)break;
+      const marker=data[i+1];
+      if(marker===0xE1){const segLen=(data[i+2]<<8)|data[i+3];i+=2+segLen;insertAt=i;}
+      else if(marker>=0xE0&&marker<=0xEF){const segLen=(data[i+2]<<8)|data[i+3];i+=2+segLen;insertAt=i;}
+      else break;
+    }
+    const result=new Uint8Array(2+app1.length+(data.length-insertAt));
+    result.set(data.slice(0,2),0);result.set(app1,2);result.set(data.slice(insertAt),2+app1.length);
+    return new Blob([result],{type:blob.type||'image/jpeg'});
+  }catch(e){console.error('EXIF write failed:',e);return blob;}
+}
+
+async function geotagDriveFile(driveId,lat,lng,filename){
+  try{
+    const resp=await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?alt=media&supportsAllDrives=true`,{
+      headers:{Authorization:`Bearer ${oauthToken}`}
+    });
+    if(!resp.ok)return;
+    const originalBlob=await resp.blob();
+    const taggedBlob=await writeExifGps(originalBlob,lat,lng);
+    const form=new FormData();
+    form.append('metadata',new Blob([JSON.stringify({name:filename})],{type:'application/json'}));
+    form.append('file',taggedBlob);
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveId}?uploadType=multipart&supportsAllDrives=true`,{
+      method:'PATCH',headers:{Authorization:`Bearer ${oauthToken}`},body:form
+    });
+  }catch(e){console.error('Geotag failed:',e);}
+}
+
+async function geotagAllPhotos(){
+  if(!oauthToken){toast('Sign in first — click Sync.');return;}
+  // Only tag photos that haven't been geotagged yet
+  const toTag=photos.filter(p=>p.driveId&&p.lat&&p.lng&&!p.geotagged);
+  if(!toTag.length){
+    toast('All photos already geotagged!');return;
+  }
+  const btn=document.getElementById('geotag-btn');
+  if(btn){btn.style.opacity='0.5';btn.style.pointerEvents='none';}
+  showLoading(`Geotagging ${toTag.length} untagged photo${toTag.length!==1?'s':''}...`);
+  let done=0,failed=0;
+  for(let i=0;i<toTag.length;i++){
+    const p=toTag[i];
+    updateLoadingProgress(`${i+1} of ${toTag.length} — ${p.name}`);
+    try{
+      await geotagDriveFile(p.driveId,p.lat,p.lng,p.name);
+      p.geotagged=true; // mark so we skip next time
+      done++;
+    }catch(e){console.error('Geotag failed for',p.name,e);failed++;}
+  }
+  save();if(oauthToken)await saveToDrive();
+  hideLoading();
+  if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
+  toast(`Geotagged ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed`:''}.`);
+}
+
+async function sortExistingPhotos(){
+  if(!oauthToken){toast('Sign in first — click Sync.');return;}
+  const btn=document.getElementById('sort-btn');
+  if(btn){btn.style.opacity='0.5';btn.style.pointerEvents='none';}
+  showLoading('Sorting photos into market folders...');
+  let moved=0,skipped=0,failed=0;
+  const toSort=photos.filter(p=>p.driveId&&p.lat&&p.lng);
+  for(let i=0;i<toSort.length;i++){
+    const p=toSort[i];
+    updateLoadingProgress(`${i+1} of ${toSort.length} — ${p.name}`);
+    const market=detectMarket(p.lat,p.lng);
+    if(!market){skipped++;continue;}
+    try{
+      const targetFolderId=await getOrCreateSubFolder(p.brand,market);
+      await moveFileToDriveFolder(p.driveId,targetFolderId,HARDCODED_FOLDER_ID);
+      p.market=market;moved++;
+    }catch(e){console.error('Sort failed for',p.name,e);failed++;}
+  }
+  save();if(oauthToken)await saveToDrive();hideLoading();
+  if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
+  toast(`Sorted ${moved} photo${moved!==1?'s':''}${skipped>0?` · ${skipped} no market match`:''}${failed>0?` · ${failed} failed`:''}.`);
+}
 
 loadConfig();load();loadPickerApi();
 // Update review badge on load
