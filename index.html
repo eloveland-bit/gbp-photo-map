@@ -190,6 +190,15 @@
   .tech-success p{font-size:14px;color:var(--text-secondary);margin-bottom:24px;}
   .btn-tech-another{font-size:14px;padding:10px 24px;border-radius:var(--radius-md);background:var(--blue);color:#fff;border:none;cursor:pointer;font-family:var(--font);}
   .tech-progress{font-size:13px;color:var(--text-secondary);text-align:center;margin-top:12px;display:none;}
+  /* Market stats panel */
+  #market-stats-panel{position:fixed;bottom:20px;left:14px;background:var(--bg-primary);border:0.5px solid var(--border-mid);border-radius:var(--radius-lg);box-shadow:0 4px 16px rgba(0,0,0,0.1);padding:12px 14px;z-index:800;min-width:180px;display:none;}
+  #market-stats-panel.visible{display:block;}
+  #market-stats-title{font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
+  #market-stats-close{background:none;border:none;cursor:pointer;color:var(--text-tertiary);font-size:14px;line-height:1;}
+  .market-stat-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:3px 0;font-size:12px;}
+  .market-stat-name{color:var(--text-secondary);}
+  .market-stat-count{font-weight:500;color:var(--text-primary);}
+  .market-stat-used{font-size:10px;color:var(--text-tertiary);}
   /* Latest upload banner */
   #latest-banner{display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
     background:var(--bg-primary);border:0.5px solid var(--border-mid);border-radius:var(--radius-lg);
@@ -332,11 +341,24 @@
     </button>
     <div class="toolbar-right">
       <button class="toggle-used marketer-only" id="toggle-used-btn">Show used</button>
+      <div class="marketer-only" style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);">
+        <i class="ti ti-calendar" style="font-size:13px"></i>
+        <select id="date-filter" style="font-size:11px;padding:2px 5px;border-radius:6px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;font-family:var(--font);" onchange="applyDateFilter()">
+          <option value="all">All time</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="60">Last 60 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+      </div>
       <span id="stats" class="marketer-only">0 unused · 0 used</span>
       <span id="last-upload" class="marketer-only"></span>
       <button class="icon-btn marketer-only" id="review-btn" onclick="toggleReviewPanel()" style="position:relative">
         <i class="ti ti-inbox"></i> Review
         <span id="review-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;">0</span>
+      </button>
+      <button class="icon-btn marketer-only" onclick="toggleMarketStats()" id="market-stats-btn" title="Photo count by market">
+        <i class="ti ti-chart-bar"></i>
       </button>
       <button class="icon-btn marketer-only" id="dup-scan-btn" onclick="openDupScanPanel()" style="position:relative">
         <i class="ti ti-copy-off"></i> Dupes
@@ -450,6 +472,15 @@
       <button class="btn-tech-another" onclick="resetTechForm()">Upload another photo</button>
     </div>
   </div>
+</div>
+
+<!-- Market stats panel -->
+<div id="market-stats-panel">
+  <div id="market-stats-title">
+    By Market
+    <button id="market-stats-close" onclick="toggleMarketStats()"><i class="ti ti-x"></i></button>
+  </div>
+  <div id="market-stats-body"></div>
 </div>
 
 <!-- Review panel -->
@@ -592,8 +623,18 @@ const DATA_FILE_KEY='gbp_drive_data_file_id';
 const DRIVE_FOLDER_NAME='GBP Photo Inventory';
 const DRIVE_DATA_FILENAME='gbp-map-data.json';
 
-const map=L.map('map',{zoomControl:true}).setView([35.5,-86.5],6);
+// Restore saved position or default to SE US
+const savedMapPos=(()=>{try{const p=localStorage.getItem('gbp_map_position');return p?JSON.parse(p):null;}catch(e){return null;}})();
+const map=L.map('map',{zoomControl:true}).setView(
+  savedMapPos?[savedMapPos.lat,savedMapPos.lng]:[35.5,-86.5],
+  savedMapPos?savedMapPos.zoom:6
+);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);
+// Save position whenever map moves
+map.on('moveend',()=>{
+  const c=map.getCenter();
+  try{localStorage.setItem('gbp_map_position',JSON.stringify({lat:c.lat,lng:c.lng,zoom:map.getZoom()}));}catch(e){}
+});
 
 let photos=[],pending=[],markers={};
 let activeBrand='all',showUsed=false,panelOpen=true;
@@ -828,7 +869,8 @@ async function loadFromDrive(){
     }
     // Scan Pending Review folder for orphaned files (uploaded but review record missing)
     scanPendingReviewFolder();
-    if(photos.length>0){
+    // Only auto-zoom on very first load (no saved position)
+    if(photos.length>0&&!localStorage.getItem('gbp_map_position')){
       const bounds=L.latLngBounds(photos.map(p=>[p.lat,p.lng]));
       map.fitBounds(bounds,{padding:[60,60]});
     }
@@ -852,7 +894,7 @@ function locKey(p){return `${parseFloat(p.lat).toFixed(5)},${parseFloat(p.lng).t
 function makeIcon(photosAtLoc,brand){
   // Only count photos that are visible under the current filter
   const visiblePhotos=photosAtLoc.filter(p=>
-    (activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used)
+    (activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used)&&isWithinDateFilter(p)
   );
   const allUsed=visiblePhotos.length>0&&visiblePhotos.every(p=>p.used);
   const count=visiblePhotos.length;
@@ -929,7 +971,7 @@ function buildPhotoCard(p){
 function buildPopup(photosAtLoc){
   // Only show photos matching current filter in the popup
   const visible=photosAtLoc.filter(p=>
-    (activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used)
+    (activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used)&&isWithinDateFilter(p)
   );
   // Fall back to all photos if filter produces nothing (shouldn't happen but safety net)
   const toShow=visible.length>0?visible:photosAtLoc;
@@ -1022,7 +1064,7 @@ function getPhotosAtLoc(key){
 
 function isLocVisible(key){
   const ps=getPhotosAtLoc(key);
-  return ps.some(p=>(activeBrand==='all'||activeBrand===p.brand)&&(showUsed||!p.used));
+  return ps.some(p=>(activeBrand==='all'||activeBrand===p.brand)&&(showUsed||!p.used)&&isWithinDateFilter(p));
 }
 
 function getPrimaryBrand(ps){
@@ -1066,6 +1108,24 @@ function addMarker(p){
 function refreshMarker(p){
   rebuildLocMarker(locKey(p));
 }
+let activeDateFilter='all';
+
+function applyDateFilter(){
+  const sel=document.getElementById('date-filter');
+  activeDateFilter=sel?sel.value:'all';
+  applyFilters();
+}
+
+function isWithinDateFilter(p){
+  if(activeDateFilter==='all')return true;
+  const days=parseInt(activeDateFilter);
+  const cutoff=new Date();
+  cutoff.setDate(cutoff.getDate()-days);
+  const dateStr=p.acceptedAt||p.submittedAt||null;
+  if(!dateStr)return true;
+  return new Date(dateStr)>=cutoff;
+}
+
 function applyFilters(){
   const keys=new Set(photos.map(p=>locKey(p)));
   keys.forEach(k=>rebuildLocMarker(k));
@@ -2586,6 +2646,10 @@ function renderReviewPanel(){
         <span class="review-card-brand" style="background:${color}">${label}</span>
         ${p.locationHint?`<div class="review-card-location"><i class="ti ti-map-pin" style="font-size:12px"></i> ${p.locationHint}</div>`:''}
         ${p.desc?`<div class="review-card-desc">"${p.desc}"</div>`:''}
+        <div style="margin-bottom:8px;">
+          <textarea id="review-note-${p.id}" placeholder="Add a note before accepting (optional)..." rows="2"
+            style="width:100%;font-size:12px;padding:5px 7px;border-radius:6px;border:0.5px solid rgba(0,0,0,0.15);font-family:var(--font);resize:none;background:var(--bg-primary);color:var(--text-primary);"></textarea>
+        </div>
         <div class="review-card-gps">${gpsText}</div>
         <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px;display:flex;gap:10px;">
           ${p.submittedBy?`<span><i class="ti ti-user" style="font-size:11px"></i> ${p.submittedBy}</span>`:''}
@@ -2608,6 +2672,9 @@ window.openLightboxUrl=function(src){
 window.acceptReview=async function(id){
   const idx=techReview.findIndex(p=>p.id===id);if(idx===-1)return;
   const p=techReview[idx];
+  // Capture note if typed
+  const noteEl=document.getElementById(`review-note-${id}`);
+  if(noteEl&&noteEl.value.trim())p.desc=noteEl.value.trim();
   const btn=document.querySelector(`#review-card-${id} .btn-review-accept`);
   if(btn){btn.disabled=true;btn.textContent='Accepting...';}
   // Move file from Pending Review folder to correct market folder in Drive
@@ -3159,6 +3226,48 @@ document.addEventListener('click',(e)=>{
     menu.style.display='none';
   }
 });
+
+// Market stats panel
+function toggleMarketStats(){
+  const panel=document.getElementById('market-stats-panel');
+  if(!panel)return;
+  const isVisible=panel.classList.contains('visible');
+  if(isVisible){panel.classList.remove('visible');return;}
+  // Build stats
+  const body=document.getElementById('market-stats-body');
+  if(!body)return;
+  body.innerHTML='';
+  const marketCounts={};
+  photos.forEach(p=>{
+    const m=p.market||'Unknown';
+    if(!marketCounts[m])marketCounts[m]={total:0,unused:0,used:0};
+    marketCounts[m].total++;
+    if(p.used)marketCounts[m].used++;
+    else marketCounts[m].unused++;
+  });
+  // Sort by unused desc
+  const sorted=Object.entries(marketCounts).sort((a,b)=>b[1].unused-a[1].unused);
+  if(!sorted.length){
+    body.innerHTML='<div style="font-size:12px;color:var(--text-tertiary);text-align:center;padding:8px">No photos on map yet.</div>';
+  }else{
+    sorted.forEach(([market,counts])=>{
+      const row=document.createElement('div');
+      row.className='market-stat-row';
+      row.innerHTML=`
+        <span class="market-stat-name">${market}</span>
+        <span>
+          <span class="market-stat-count">${counts.unused}</span>
+          <span class="market-stat-used"> / ${counts.total}</span>
+        </span>`;
+      body.appendChild(row);
+    });
+    const hint=document.createElement('div');
+    hint.style.cssText='font-size:10px;color:var(--text-tertiary);margin-top:8px;border-top:0.5px solid var(--border-light);padding-top:6px;';
+    hint.textContent='unused / total';
+    body.appendChild(hint);
+  }
+  panel.classList.add('visible');
+}
 
 loadConfig();load();loadPickerApi();
 loadCompanies();
