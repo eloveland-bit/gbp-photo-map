@@ -3054,13 +3054,14 @@ async function hashAllPhotos(){
   if(!toHash.length){toast('All photos already have hash data!');return;}
   const btn=document.getElementById('hash-btn');
   if(btn){btn.style.opacity='0.5';btn.style.pointerEvents='none';}
+  // Pause auto-sync so it doesn't overwrite hashes mid-run
+  if(autoSyncInterval){clearInterval(autoSyncInterval);autoSyncInterval=null;}
   showLoading(`Generating hashes for ${toHash.length} photo${toHash.length!==1?'s':''}...`);
   let done=0,failed=0;
   for(let i=0;i<toHash.length;i++){
     const p=toHash[i];
     updateLoadingProgress(`${i+1} of ${toHash.length} — ${p.name}`);
     try{
-      // Download thumbnail-size version for hashing (faster than full res)
       const resp=await fetch(`https://www.googleapis.com/drive/v3/files/${p.driveId}?alt=media&supportsAllDrives=true`,{
         headers:{Authorization:`Bearer ${oauthToken}`}
       });
@@ -3070,22 +3071,30 @@ async function hashAllPhotos(){
       const hash=await perceptualHash(file);
       p.hash=hash;
       done++;
-      // Save every 10 photos so progress isn't lost if tab closes
-      if(done%10===0){
-        save();
-        if(oauthToken)saveToDrive();
+      // Save to localStorage immediately on every photo
+      try{localStorage.setItem(STORAGE_KEY,JSON.stringify(photos.map(ph=>({
+        id:ph.id,name:ph.name,lat:ph.lat,lng:ph.lng,brand:ph.brand,used:ph.used,
+        thumb:ph.thumb,hash:ph.hash||null,desc:ph.desc||null,manual:ph.manual||false,
+        driveId:ph.driveId||null,acceptedAt:ph.acceptedAt||null,
+        pinnedAt:ph.pinnedAt||null,geotagged:ph.geotagged||false
+      }))));}catch(e){}
+      // Await Drive save every 5 photos to ensure it sticks
+      if(done%5===0){
+        await saveToDrive();
       }
     }catch(e){
       console.error('Hash failed for',p.name,e);
       failed++;
     }
   }
-  // Final save
+  // Final await save
   save();
-  if(oauthToken)await saveToDrive();
+  await saveToDrive();
   hideLoading();
   if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
-  toast(`Hashed ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed`:''} — run Scan Dupes to check for matches.`);
+  // Restart auto-sync now that we're done
+  startAutoSync();
+  toast(`Hashed ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed':''} — run Scan Dupes to check for matches.`);
 }
 
 // ============================================================
@@ -3316,6 +3325,8 @@ async function backfillDates(){
   }
   const btn=document.getElementById('backfill-btn');
   if(btn){btn.style.opacity='0.5';btn.style.pointerEvents='none';}
+  // Pause auto-sync so it doesn't overwrite dates mid-run
+  if(autoSyncInterval){clearInterval(autoSyncInterval);autoSyncInterval=null;}
   showLoading(`Fetching dates for ${toFetch.length} photo${toFetch.length!==1?'s':''}...`);
   let done=0,failed=0;
   // Batch requests — fetch metadata 10 at a time using Drive batch or individual calls
@@ -3349,6 +3360,8 @@ async function backfillDates(){
   if(oauthToken)await saveToDrive();
   hideLoading();
   if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
+  // Restart auto-sync
+  startAutoSync();
   toast(`Dated ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed`:''} — date filter now covers all photos.`);
   // Refresh filters
   applyFilters();
