@@ -643,10 +643,7 @@ const DRIVE_DATA_FILENAME='gbp-map-data.json';
 
 // Restore saved position or default to SE US
 const savedMapPos=(()=>{try{const p=localStorage.getItem('gbp_map_position');return p?JSON.parse(p):null;}catch(e){return null;}})();
-const map=L.map('map',{zoomControl:true}).setView(
-  savedMapPos?[savedMapPos.lat,savedMapPos.lng]:[35.5,-86.5],
-  savedMapPos?savedMapPos.zoom:6
-);
+const map=L.map('map',{zoomControl:true}).setView(savedMapPos?[savedMapPos.lat,savedMapPos.lng]:[35.5,-86.5],savedMapPos?savedMapPos.zoom:6);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);
 // Save position whenever map moves
 map.on('moveend',()=>{
@@ -3094,7 +3091,8 @@ async function hashAllPhotos(){
   if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
   // Restart auto-sync now that we're done
   startAutoSync();
-  toast(`Hashed ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed':''} — run Scan Dupes to check for matches.`);
+  const hashMsg='Hashed '+done+' photo'+(done!==1?'s':'')+(failed>0?' · '+failed+' failed':'')+' — run Scan Dupes to check for matches.';
+  toast(hashMsg);
 }
 
 // ============================================================
