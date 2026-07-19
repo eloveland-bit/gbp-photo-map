@@ -2595,7 +2595,7 @@ async function sortExistingPhotos(){
   if(oauthToken)await saveToDrive();
   hideLoading();
   if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
-  toast(`Sorted ${moved} photo${moved!==1?'s':''}${skipped>0?` · ${skipped} no market match`:''}${failed>0?` · ${failed} failed`:''}.`);
+  toast('Sorted '+moved+' photo'+(moved!==1?'s':'')+(skipped>0?' · '+skipped+' no market match':'')+(failed>0?' · '+failed+' failed':'')+'.');
 }
 
 // Geotag all existing pinned photos that have coordinates
@@ -2620,7 +2620,7 @@ async function geotagAllPhotos(){
   }
   hideLoading();
   if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
-  toast(`Geotagged ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed`:''}.`);
+  toast('Geotagged '+done+' photo'+(done!==1?'s':'')+(failed>0?' · '+failed+' failed':'')+'.');
 }
 
 // Review panel
@@ -2898,7 +2898,7 @@ async function geotagAllPhotos(){
   save();if(oauthToken)await saveToDrive();
   hideLoading();
   if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
-  toast(`Geotagged ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed`:''}.`);
+  toast('Geotagged '+done+' photo'+(done!==1?'s':'')+(failed>0?' · '+failed+' failed':'')+'.');
 }
 
 async function sortExistingPhotos(){
@@ -2921,7 +2921,7 @@ async function sortExistingPhotos(){
   }
   save();if(oauthToken)await saveToDrive();hideLoading();
   if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
-  toast(`Sorted ${moved} photo${moved!==1?'s':''}${skipped>0?` · ${skipped} no market match`:''}${failed>0?` · ${failed} failed`:''}.`);
+  toast('Sorted '+moved+' photo'+(moved!==1?'s':'')+(skipped>0?' · '+skipped+' no market match':'')+(failed>0?' · '+failed+' failed':'')+'.');
 }
 
 // Duplicate scanner
@@ -2968,44 +2968,52 @@ function runDupScan(){
   body.innerHTML='';
 
   pairs.forEach(([a,b],idx)=>{
+    const pairId='pair-'+a.id.slice(-6)+'-'+b.id.slice(-6);
     const div=document.createElement('div');
     div.className='dup-pair';
-    div.id=`dup-pair-${idx}`;
+    div.id=pairId;
     const aColor=brandColors[a.brand]||'#444';
     const bColor=brandColors[b.brand]||'#444';
     const aLabel=brandLabels[a.brand]||a.brand;
     const bLabel=brandLabels[b.brand]||b.brand;
-    const aCoords=`${parseFloat(a.lat).toFixed(4)}, ${parseFloat(a.lng).toFixed(4)}`;
-    const bCoords=`${parseFloat(b.lat).toFixed(4)}, ${parseFloat(b.lng).toFixed(4)}`;
-    div.innerHTML=`
-      <div class="dup-pair-header">Duplicate pair ${idx+1}</div>
-      <div class="dup-pair-photos">
-        <div class="dup-photo">
-          ${a.thumb?`<img src="${a.thumb}" alt="${a.name}" onclick="openLightboxUrl('${a.thumb}')">` : '<div style="height:100px;background:var(--bg-tertiary);border-radius:6px;margin-bottom:6px"></div>'}
-          <div class="dup-photo-name">${a.name}</div>
-          <span class="dup-photo-brand" style="background:${aColor}">${aLabel}</span>
-          <div class="dup-photo-coords">${aCoords}</div>
-          <button class="btn-dup-keep" onclick="keepPhoto('${a.id}','${b.id}',${idx})">Keep this one</button>
-        </div>
-        <div class="dup-photo">
-          ${b.thumb?`<img src="${b.thumb}" alt="${b.name}" onclick="openLightboxUrl('${b.thumb}')">` : '<div style="height:100px;background:var(--bg-tertiary);border-radius:6px;margin-bottom:6px"></div>'}
-          <div class="dup-photo-name">${b.name}</div>
-          <span class="dup-photo-brand" style="background:${bColor}">${bLabel}</span>
-          <div class="dup-photo-coords">${bCoords}</div>
-          <button class="btn-dup-keep" onclick="keepPhoto('${b.id}','${a.id}',${idx})">Keep this one</button>
-        </div>
-      </div>
-      <div style="padding:8px 10px;border-top:0.5px solid var(--border-light);">
-        <button class="btn-dup-skip-pair" onclick="skipDupPair(${idx})">Skip — keep both</button>
-      </div>`;
+    const aCoords=parseFloat(a.lat).toFixed(4)+', '+parseFloat(a.lng).toFixed(4);
+    const bCoords=parseFloat(b.lat).toFixed(4)+', '+parseFloat(b.lng).toFixed(4);
+    const aThumb=a.thumb?'<img src="'+a.thumb+'" alt="photo" onclick="openLightboxUrl(this.src)" style="width:100%;height:100px;object-fit:cover;border-radius:6px;display:block;cursor:zoom-in;margin-bottom:6px">':'<div style="height:100px;background:var(--bg-tertiary);border-radius:6px;margin-bottom:6px"></div>';
+    const bThumb=b.thumb?'<img src="'+b.thumb+'" alt="photo" onclick="openLightboxUrl(this.src)" style="width:100%;height:100px;object-fit:cover;border-radius:6px;display:block;cursor:zoom-in;margin-bottom:6px">':'<div style="height:100px;background:var(--bg-tertiary);border-radius:6px;margin-bottom:6px"></div>';
+    div.innerHTML=
+      '<div class="dup-pair-header">Duplicate pair '+(idx+1)+'</div>'+
+      '<div class="dup-pair-photos">'+
+        '<div class="dup-photo">'+aThumb+
+          '<div class="dup-photo-name">'+a.name+'</div>'+
+          '<span class="dup-photo-brand" style="background:'+aColor+'">'+aLabel+'</span>'+
+          '<div class="dup-photo-coords">'+aCoords+'</div>'+
+          '<button class="btn-dup-keep" data-keep="'+a.id+'" data-remove="'+b.id+'" data-pair="'+pairId+'">Keep this one</button>'+
+        '</div>'+
+        '<div class="dup-photo">'+bThumb+
+          '<div class="dup-photo-name">'+b.name+'</div>'+
+          '<span class="dup-photo-brand" style="background:'+bColor+'">'+bLabel+'</span>'+
+          '<div class="dup-photo-coords">'+bCoords+'</div>'+
+          '<button class="btn-dup-keep" data-keep="'+b.id+'" data-remove="'+a.id+'" data-pair="'+pairId+'">Keep this one</button>'+
+        '</div>'+
+      '</div>'+
+      '<div style="padding:8px 10px;border-top:0.5px solid var(--border-light);">'+
+        '<button class="btn-dup-skip-pair" data-pair="'+pairId+'">Skip — keep both</button>'+
+      '</div>';
     body.appendChild(div);
   });
+  // Use event delegation so buttons work reliably
+  body.addEventListener('click',function handler(e){
+    const keepBtn=e.target.closest('.btn-dup-keep');
+    const skipBtn=e.target.closest('.btn-dup-skip-pair');
+    if(keepBtn){keepPhoto(keepBtn.dataset.keep,keepBtn.dataset.remove,keepBtn.dataset.pair);}
+    if(skipBtn){skipDupPair(skipBtn.dataset.pair);}
+  },{once:false});
 }
 
-window.keepPhoto=async function(keepId,removeId,pairIdx){
+window.keepPhoto=async function(keepId,removeId,pairId){
   const toRemove=photos.find(p=>p.id===removeId);
   if(!toRemove)return;
-  if(!confirm(`Remove "${toRemove.name}" from the map and Drive?`))return;
+  if(!confirm('Remove "'+toRemove.name+'" from the map and Drive?'))return;
   // Remove from Drive
   if(toRemove.driveId&&oauthToken){
     try{
@@ -3033,14 +3041,14 @@ window.keepPhoto=async function(keepId,removeId,pairIdx){
   }
   save();if(oauthToken)await saveToDrive();
   updateStats();
-  // Remove pair card
-  const card=document.getElementById(`dup-pair-${pairIdx}`);
+  // Remove pair card using stable ID
+  const card=document.getElementById(pairId);
   if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>card.remove(),300);}
   toast('Duplicate removed from map and Drive.');
 };
 
-window.skipDupPair=function(idx){
-  const card=document.getElementById(`dup-pair-${idx}`);
+window.skipDupPair=function(pairId){
+  const card=document.getElementById(pairId);
   if(card){card.style.opacity='0';card.style.transition='opacity 0.3s';setTimeout(()=>card.remove(),300);}
 };
 
@@ -3360,7 +3368,7 @@ async function backfillDates(){
   if(btn){btn.style.opacity='1';btn.style.pointerEvents='auto';}
   // Restart auto-sync
   startAutoSync();
-  toast(`Dated ${done} photo${done!==1?'s':''}${failed>0?` · ${failed} failed`:''} — date filter now covers all photos.`);
+  toast('Dated '+done+' photo'+(done!==1?'s':'')+(failed>0?' · '+failed+' failed':'')+'  date filter now covers all photos.');
   // Refresh filters
   applyFilters();
   updateStats();
