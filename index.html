@@ -3484,37 +3484,79 @@ function manualSync(){
   });
 }
 
-// Load map data publicly without auth (requires gbp-map-data.json shared as "Anyone with link can view")
+// Load map data for view mode — signs in silently with read-only scope
+const PUBLIC_DATA_FILE_ID='1h-T89SYxd3d8VUdWAMpaj9fAH03A7h3D';
+let viewToken=null;
+
 async function loadPublicDriveData(){
-  // Hardcoded public file ID — gbp-map-data.json shared as "Anyone with link can view"
-  const fileId='1h-T89SYxd3d8VUdWAMpaj9fAH03A7h3D';
+  // Try localStorage cache first so map appears immediately
   try{
-    // Public Drive export URL — works if file is shared publicly
-    const url='https://drive.google.com/uc?export=download&id='+fileId;
-    const resp=await fetch(url);
-    if(!resp.ok)throw new Error('Not public');
+    const r=localStorage.getItem(STORAGE_KEY);
+    if(r){
+      const cached=JSON.parse(r);
+      if(cached.length>0){
+        photos=cached;
+        photos.forEach(p=>addMarker(p));
+        updateStats();checkNoPhotos();
+      }
+    }
+  }catch(e){}
+
+  // Then sign in silently to get full data from Drive
+  if(!window.google||!window.google.accounts){
+    const s=document.createElement('script');
+    s.src='https://accounts.google.com/gsi/client';
+    s.onload=()=>silentViewSignIn();
+    document.body.appendChild(s);
+  }else{
+    silentViewSignIn();
+  }
+}
+
+function silentViewSignIn(){
+  try{
+    const client=google.accounts.oauth2.initTokenClient({
+      client_id:config.clientId,
+      scope:'https://www.googleapis.com/auth/drive.readonly',
+      callback:async(resp)=>{
+        if(resp.error||!resp.access_token)return; // stay on cache
+        viewToken=resp.access_token;
+        await fetchViewData();
+      }
+    });
+    client.requestAccessToken({prompt:'none'});
+  }catch(e){}
+}
+
+async function fetchViewData(){
+  if(!viewToken)return;
+  try{
+    const resp=await fetch(
+      'https://www.googleapis.com/drive/v3/files/'+PUBLIC_DATA_FILE_ID+'?alt=media',
+      {headers:{Authorization:'Bearer '+viewToken}}
+    );
+    if(!resp.ok)return;
     const data=await resp.json();
-    if(!data.photos)throw new Error('No data');
-    // Clear markers and reload
+    if(!data.photos||!data.photos.length)return;
+    // Clear and reload with full dataset
     Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
-    photos=data.photos||[];
+    photos=data.photos;
     photos.forEach(p=>addMarker(p));
+    // Cache locally for next time
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(photos));}catch(e){}
+    updateStats();checkNoPhotos();
     if(photos.length>0&&!localStorage.getItem('gbp_map_position')){
       const bounds=L.latLngBounds(photos.map(p=>[p.lat,p.lng]));
       map.fitBounds(bounds,{padding:[60,60]});
     }
-    updateStats();checkNoPhotos();
-    toast(photos.length+' photos loaded.');
-  }catch(e){
-    // Fall back to localStorage cache
-    updateStats();checkNoPhotos();
-  }
+  }catch(e){console.error('View data fetch failed:',e);}
 }
 
 function tryAutoSignIn(){
-  // In view mode — try to load from public Drive data file first
   if(isViewMode){
+    // Show cached data instantly, then load full dataset from Drive
+    updateStats();checkNoPhotos();
     loadPublicDriveData();
     return;
   }
