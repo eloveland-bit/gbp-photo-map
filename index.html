@@ -41,6 +41,9 @@
   .tb-group{display:flex;align-items:center;gap:5px;flex-shrink:0;}
   .filter-btn{font-size:11px;padding:3px 9px;border-radius:20px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;transition:all 0.15s;font-family:var(--font);white-space:nowrap;}
   .filter-btn.active{border-color:transparent;color:#fff;}
+  /* Category filter pills */
+  .cat-btn{font-size:11px;padding:3px 9px;border-radius:20px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;transition:all 0.15s;font-family:var(--font);white-space:nowrap;}
+  .cat-btn.active{background:#555;border-color:transparent;color:#fff;}
   .filter-btn[data-brand="all"].active{background:#555;}
   .filter-btn[data-brand="mosquito"].active{background:var(--blue);}
   .filter-btn[data-brand="lawn"].active{background:var(--green);}
@@ -348,6 +351,13 @@
     </button>
     <div class="toolbar-right">
       <button class="toggle-used marketer-only" id="toggle-used-btn">Show used</button>
+      <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+        <button class="cat-btn active" data-cat="all">All types</button>
+        <button class="cat-btn" data-cat="truck">🚛 Truck</button>
+        <button class="cat-btn" data-cat="insect">🦟 Insect</button>
+        <button class="cat-btn" data-cat="technician">👷 Technician</button>
+        <button class="cat-btn" data-cat="misc">📦 Misc</button>
+      </div>
       <div class="marketer-only" style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);">
         <i class="ti ti-calendar" style="font-size:13px"></i>
         <select id="date-filter" style="font-size:11px;padding:2px 5px;border-radius:6px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;font-family:var(--font);" onchange="applyDateFilter()" title="Filters to photos accepted/pinned within this window. Older photos without dates are hidden when a date filter is active.">
@@ -652,7 +662,7 @@ map.on('moveend',()=>{
 });
 
 let photos=[],pending=[],markers={};
-let activeBrand='all',showUsed=false,panelOpen=true;
+let activeBrand='all',activeCategory='all',showUsed=false,panelOpen=true;
 let pickerApiLoaded=false,oauthToken=null,driveFolderId=null,driveDataFileId=null,pendingReviewFolderId=null,deniedFolderId=null,saveTimer=null;
 let techReview=[];
 let deletedIds=new Set();
@@ -700,7 +710,7 @@ function hideLoading(){document.getElementById('loading-overlay').style.display=
 // Serialize current state
 function getStateData(){
   return {
-    photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null,acceptedAt:p.acceptedAt||null,pinnedAt:p.pinnedAt||null,geotagged:p.geotagged||false})),
+    photos: photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null,acceptedAt:p.acceptedAt||null,pinnedAt:p.pinnedAt||null,geotagged:p.geotagged||false,category:p.category||null})),
     pending: pending.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,driveId:p.driveId||null})),
     techReview: techReview.map(p=>({id:p.id,name:p.name,brand:p.brand,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,driveId:p.driveId||null,locationHint:p.locationHint||null,coords:p.coords||null,submittedBy:p.submittedBy||null,submittedAt:p.submittedAt||null})),
     deletedIds: Array.from(deletedIds)
@@ -909,7 +919,7 @@ function locKey(p){return `${parseFloat(p.lat).toFixed(5)},${parseFloat(p.lng).t
 function makeIcon(photosAtLoc,brand){
   // Only count photos that are visible under the current filter
   const visiblePhotos=photosAtLoc.filter(p=>
-    (activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used)&&isWithinDateFilter(p)
+    (activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used)&&isWithinDateFilter(p)&&(activeCategory==='all'||p.category===activeCategory)
   );
   const allUsed=visiblePhotos.length>0&&visiblePhotos.every(p=>p.used);
   const count=visiblePhotos.length;
@@ -941,6 +951,13 @@ function buildPhotoCard(p){
       <option value="lawn" ${p.brand==='lawn'?'selected':''}>Lawn Squad</option>
       <option value="newage" ${p.brand==='newage'?'selected':''}>New Age Lights</option>
       ${companies.map(co=>`<option value="${co.id}" ${p.brand===co.id?'selected':''}>${co.name}</option>`).join('')}
+    </select>
+    <select class="popup-brand-select" onchange="changeCategory('${p.id}',this.value)" style="font-size:11px;padding:2px 5px;border-radius:6px;border:0.5px solid rgba(0,0,0,0.2);background:#fff;color:#1a1a18;cursor:pointer;font-family:var(--font);">
+      <option value="" ${!p.category?'selected':''}>— type —</option>
+      <option value="truck" ${p.category==='truck'?'selected':''}>🚛 Truck</option>
+      <option value="insect" ${p.category==='insect'?'selected':''}>🦟 Insect</option>
+      <option value="technician" ${p.category==='technician'?'selected':''}>👷 Technician</option>
+      <option value="misc" ${p.category==='misc'?'selected':''}>📦 Misc</option>
     </select>`;
   }
   html+=`</div>`;
@@ -986,7 +1003,7 @@ function buildPhotoCard(p){
 function buildPopup(photosAtLoc){
   // Only show photos matching current filter in the popup
   const visible=photosAtLoc.filter(p=>
-    (activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used)&&isWithinDateFilter(p)
+    (activeBrand==='all'||p.brand===activeBrand)&&(showUsed||!p.used)&&isWithinDateFilter(p)&&(activeCategory==='all'||p.category===activeCategory)
   );
   // Fall back to all photos if filter produces nothing (shouldn't happen but safety net)
   const toShow=visible.length>0?visible:photosAtLoc;
@@ -1079,7 +1096,7 @@ function getPhotosAtLoc(key){
 
 function isLocVisible(key){
   const ps=getPhotosAtLoc(key);
-  return ps.some(p=>(activeBrand==='all'||activeBrand===p.brand)&&(showUsed||!p.used)&&isWithinDateFilter(p));
+  return ps.some(p=>(activeBrand==='all'||activeBrand===p.brand)&&(showUsed||!p.used)&&isWithinDateFilter(p)&&(activeCategory==='all'||p.category===activeCategory));
 }
 
 function getPrimaryBrand(ps){
@@ -2121,6 +2138,14 @@ document.querySelectorAll('.filter-btn').forEach(btn=>{
     btn.classList.add('active');activeBrand=btn.dataset.brand;applyFilters();
   });
 });
+document.querySelectorAll('.cat-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.cat-btn').forEach(b=>{b.classList.remove('active');b.style.background='';b.style.color='';});
+    btn.classList.add('active');
+    activeCategory=btn.dataset.cat;
+    applyFilters();
+  });
+});
 document.getElementById('toggle-used-btn').addEventListener('click',function(){
   showUsed=!showUsed;this.classList.toggle('active',showUsed);
   this.textContent=showUsed?'Hide used':'Show used';applyFilters();
@@ -2132,6 +2157,14 @@ window.editDesc=function(id){
   const wrap=document.getElementById(`desc-edit-${id}`);
   if(wrap)wrap.style.display=wrap.style.display==='none'?'block':'none';
 };
+window.changeCategory=function(id,newCat){
+  const p=photos.find(x=>x.id===id);if(!p)return;
+  p.category=newCat||null;
+  save();if(oauthToken)saveToDrive();
+  map.closePopup();
+  toast(newCat?'Category set to '+newCat+'.':'Category cleared.');
+};
+
 window.changeBrand=function(id,newBrand){
   const p=photos.find(x=>x.id===id);if(!p)return;
   const oldKey=locKey(p);
@@ -3451,11 +3484,38 @@ function manualSync(){
   });
 }
 
-function tryAutoSignIn(){
-  // In view mode, don't require sign-in — just show cached data
-  if(isViewMode){
-    // Load from localStorage cache only
+// Load map data publicly without auth (requires gbp-map-data.json shared as "Anyone with link can view")
+async function loadPublicDriveData(){
+  // Hardcoded public file ID — gbp-map-data.json shared as "Anyone with link can view"
+  const fileId='1h-T89SYxd3d8VUdWAMpaj9fAH03A7h3D';
+  try{
+    // Public Drive export URL — works if file is shared publicly
+    const url='https://drive.google.com/uc?export=download&id='+fileId;
+    const resp=await fetch(url);
+    if(!resp.ok)throw new Error('Not public');
+    const data=await resp.json();
+    if(!data.photos)throw new Error('No data');
+    // Clear markers and reload
+    Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
+    locMarkers={};markers={};
+    photos=data.photos||[];
+    photos.forEach(p=>addMarker(p));
+    if(photos.length>0&&!localStorage.getItem('gbp_map_position')){
+      const bounds=L.latLngBounds(photos.map(p=>[p.lat,p.lng]));
+      map.fitBounds(bounds,{padding:[60,60]});
+    }
     updateStats();checkNoPhotos();
+    toast(photos.length+' photos loaded.');
+  }catch(e){
+    // Fall back to localStorage cache
+    updateStats();checkNoPhotos();
+  }
+}
+
+function tryAutoSignIn(){
+  // In view mode — try to load from public Drive data file first
+  if(isViewMode){
+    loadPublicDriveData();
     return;
   }
   try{
