@@ -909,7 +909,23 @@ async function loadFromDrive(){
     );
     Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
-    photos = [...drivePhotos, ...localOnly];
+    // Merge drivePhotos with local versions — preserve locally-set fields that may be newer
+    const localById=new Map(photos.map(p=>[p.id,p]));
+    const mergedPhotos=drivePhotos.map(dp=>{
+      const local=localById.get(dp.id);
+      if(!local)return dp;
+      // Keep whichever version has category, desc, geotagged set — local wins on these
+      return Object.assign({},dp,{
+        category:local.category||dp.category||null,
+        desc:local.desc||dp.desc||null,
+        geotagged:local.geotagged||dp.geotagged||false,
+        used:dp.used, // Drive wins on used (marketer decision)
+        hash:local.hash||dp.hash||null,
+        pinnedAt:local.pinnedAt||dp.pinnedAt||null,
+        acceptedAt:local.acceptedAt||dp.acceptedAt||null,
+      });
+    });
+    photos = [...mergedPhotos, ...localOnly];
     pending = [...filteredDrivePending, ...localPendingOnly];
     techReview = [...driveTechReview, ...localTechReviewOnly];
     photos.forEach(p=>addMarker(p));
@@ -2211,6 +2227,12 @@ window.editDesc=function(id){
 window.changeCategory=function(id,newCat){
   const p=photos.find(x=>x.id===id);if(!p)return;
   p.category=newCat||null;
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(photos.map(ph=>({
+    id:ph.id,name:ph.name,lat:ph.lat,lng:ph.lng,brand:ph.brand,used:ph.used,
+    thumb:ph.thumb,hash:ph.hash||null,desc:ph.desc||null,manual:ph.manual||false,
+    driveId:ph.driveId||null,acceptedAt:ph.acceptedAt||null,pinnedAt:ph.pinnedAt||null,
+    geotagged:ph.geotagged||false,category:ph.category||null
+  }))));}catch(e){}
   save();if(oauthToken)saveToDrive();
   map.closePopup();
   toast(newCat?'Category set to '+newCat+'.':'Category cleared.');
@@ -3567,12 +3589,19 @@ function renderCatPanel(){
   };
 }
 
-window.setCatFromPanel=function(id,cat){
+window.setCatFromPanel=async function(id,cat){
   const p=photos.find(x=>x.id===id);
   if(!p)return;
   p.category=cat;
+  // Write to localStorage immediately so it survives before Drive save completes
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(photos.map(ph=>({
+    id:ph.id,name:ph.name,lat:ph.lat,lng:ph.lng,brand:ph.brand,used:ph.used,
+    thumb:ph.thumb,hash:ph.hash||null,desc:ph.desc||null,manual:ph.manual||false,
+    driveId:ph.driveId||null,acceptedAt:ph.acceptedAt||null,pinnedAt:ph.pinnedAt||null,
+    geotagged:ph.geotagged||false,category:ph.category||null
+  }))));}catch(e){}
   save();
-  if(oauthToken)saveToDrive();
+  if(oauthToken)await saveToDrive();
   // Animate card out
   const card=document.getElementById('cat-item-'+id);
   if(card){
