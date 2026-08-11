@@ -3589,11 +3589,11 @@ function renderCatPanel(){
   };
 }
 
-window.setCatFromPanel=async function(id,cat){
+window.setCatFromPanel=function(id,cat){
   const p=photos.find(x=>x.id===id);
   if(!p)return;
   p.category=cat;
-  // Write to localStorage immediately so it survives before Drive save completes
+  // Write to localStorage immediately
   try{localStorage.setItem(STORAGE_KEY,JSON.stringify(photos.map(ph=>({
     id:ph.id,name:ph.name,lat:ph.lat,lng:ph.lng,brand:ph.brand,used:ph.used,
     thumb:ph.thumb,hash:ph.hash||null,desc:ph.desc||null,manual:ph.manual||false,
@@ -3601,7 +3601,8 @@ window.setCatFromPanel=async function(id,cat){
     geotagged:ph.geotagged||false,category:ph.category||null
   }))));}catch(e){}
   save();
-  if(oauthToken)await saveToDrive();
+  // Save to Drive in background — don't await, don't block UI
+  if(oauthToken)saveToDrive();
   // Animate card out
   const card=document.getElementById('cat-item-'+id);
   if(card){
