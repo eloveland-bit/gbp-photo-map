@@ -3706,17 +3706,20 @@ function manualSync(){
   });
 }
 
-// Load map data for view mode — signs in silently with read-only scope
-const PUBLIC_DATA_FILE_ID='1h-T89SYxd3d8VUdWAMpaj9fAH03A7h3D';
-let viewToken=null;
+// Load map data for view mode — uses Apps Script endpoint, no sign-in needed
+const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbzZibkrKzGZ92kJveTG_tcFNbdjb9U-cqwnz-527akNz5RolJ1H6K_L_AQ0o_XjoyA1gw/exec';
 
 async function loadPublicDriveData(){
-  // Try localStorage cache first so map appears immediately
+  // Show loading state on button
+  const btn=document.getElementById('view-signin-btn');
+  if(btn){btn.textContent='Loading...';btn.disabled=true;}
+
+  // Try localStorage cache first so map appears immediately while fetching
   try{
     const r=localStorage.getItem(STORAGE_KEY);
     if(r){
       const cached=JSON.parse(r);
-      if(cached.length>0){
+      if(Array.isArray(cached)&&cached.length>0){
         photos=cached;
         photos.forEach(p=>addMarker(p));
         updateStats();checkNoPhotos();
@@ -3724,102 +3727,35 @@ async function loadPublicDriveData(){
     }
   }catch(e){}
 
-  // Load Google Identity Services and try silent sign-in
-  if(!window.google||!window.google.accounts){
-    const s=document.createElement('script');
-    s.src='https://accounts.google.com/gsi/client';
-    s.onload=()=>silentViewSignIn();
-    document.body.appendChild(s);
-  }else{
-    silentViewSignIn();
-  }
-  // Show the button immediately so user can click if silent sign-in doesn't fire
-  const btn=document.getElementById('view-signin-btn');
-  if(btn)btn.style.display='inline-flex';
-}
-
-function silentViewSignIn(){
+  // Fetch fresh data from Apps Script — no sign-in required, works for anyone
   try{
-    const client=google.accounts.oauth2.initTokenClient({
-      client_id:config.clientId,
-      scope:'https://www.googleapis.com/auth/drive.readonly',
-      callback:async(resp)=>{
-        if(resp.error||!resp.access_token)return; // stay on cache
-        viewToken=resp.access_token;
-        const btn=document.getElementById('view-signin-btn');
-        if(btn)btn.style.display='none';
-        await fetchViewData();
-      }
-    });
-    client.requestAccessToken({prompt:'none'});
-  }catch(e){}
-}
-
-// Interactive sign-in for view mode (triggered by button)
-function viewSignIn(){
-  const btn=document.getElementById('view-signin-btn');
-  if(btn){btn.textContent='Loading...';btn.disabled=true;}
-  if(!window.google||!window.google.accounts){
-    const s=document.createElement('script');
-    s.src='https://accounts.google.com/gsi/client';
-    s.onload=()=>doViewSignIn();
-    document.body.appendChild(s);
-  }else{
-    doViewSignIn();
-  }
-}
-
-function doViewSignIn(){
-  try{
-    const client=google.accounts.oauth2.initTokenClient({
-      client_id:config.clientId,
-      scope:'https://www.googleapis.com/auth/drive.readonly',
-      callback:async(resp)=>{
-        const btn=document.getElementById('view-signin-btn');
-        if(resp.error||!resp.access_token){
-          if(btn){btn.textContent='Load all photos';btn.disabled=false;}
-          return;
-        }
-        viewToken=resp.access_token;
-        if(btn)btn.style.display='none';
-        await fetchViewData();
-      }
-    });
-    // Use prompt:'' to allow interactive sign-in if silent fails
-    client.requestAccessToken({prompt:''});
-  }catch(e){
-    const btn=document.getElementById('view-signin-btn');
-    if(btn){btn.textContent='Load all photos';btn.disabled=false;}
-  }
-}
-
-async function fetchViewData(){
-  if(!viewToken)return;
-  try{
-    const resp=await fetch(
-      'https://www.googleapis.com/drive/v3/files/'+PUBLIC_DATA_FILE_ID+'?alt=media',
-      {headers:{Authorization:'Bearer '+viewToken}}
-    );
-    if(!resp.ok)return;
+    const resp=await fetch(APPS_SCRIPT_URL);
+    if(!resp.ok)throw new Error('Fetch failed: '+resp.status);
     const data=await resp.json();
-    if(!data.photos||!data.photos.length)return;
+    if(!data.photos||!data.photos.length)throw new Error('No photos in data');
     // Clear and reload with full dataset
     Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
     photos=data.photos;
     photos.forEach(p=>addMarker(p));
-    // Cache locally for next time
+    // Cache for next time
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify(photos));}catch(e){}
     updateStats();checkNoPhotos();
     if(photos.length>0&&!localStorage.getItem('gbp_map_position')){
       const bounds=L.latLngBounds(photos.map(p=>[p.lat,p.lng]));
       map.fitBounds(bounds,{padding:[60,60]});
     }
-    // Hide sign-in button once loaded
-    const btn=document.getElementById('view-signin-btn');
     if(btn)btn.style.display='none';
-  }catch(e){console.error('View data fetch failed:',e);}
+  }catch(e){
+    console.error('Apps Script fetch failed:',e);
+    // Button stays visible so user can retry
+    if(btn){btn.textContent='Load all photos';btn.disabled=false;}
+  }
 }
+
+// Keep these as stubs so existing references don't break
+function silentViewSignIn(){}
+function viewSignIn(){loadPublicDriveData();}
 
 function tryAutoSignIn(){
   if(isViewMode){
