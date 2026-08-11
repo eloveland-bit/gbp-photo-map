@@ -216,6 +216,26 @@
   #latest-banner-meta{font-size:11px;color:var(--text-secondary);margin-top:1px;}
   #latest-banner-close{background:none;border:none;cursor:pointer;color:var(--text-tertiary);font-size:16px;padding:4px;flex-shrink:0;}
   #latest-banner-close:hover{color:var(--text-primary);}
+  /* Categorize panel */
+  #cat-panel{position:fixed;top:0;right:-440px;width:420px;height:100vh;background:var(--bg-primary);border-left:0.5px solid var(--border-mid);z-index:1000;transition:right 0.3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.1);}
+  #cat-panel.open{right:0;}
+  #cat-panel-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:0.5px solid var(--border-light);flex-shrink:0;}
+  #cat-panel-header h3{font-size:15px;font-weight:500;}
+  #cat-panel-close{background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:18px;padding:4px;}
+  #cat-panel-body{flex:1;overflow-y:auto;padding:16px;}
+  #cat-progress-bar{height:3px;background:var(--border-light);flex-shrink:0;}
+  #cat-progress-fill{height:100%;background:var(--blue);transition:width 0.3s;}
+  .cat-item{background:var(--bg-secondary);border-radius:var(--radius-md);overflow:hidden;margin-bottom:12px;border:0.5px solid var(--border-light);}
+  .cat-item img{width:100%;height:180px;object-fit:cover;display:block;cursor:zoom-in;}
+  .cat-item-body{padding:10px 12px;}
+  .cat-item-name{font-size:12px;color:var(--text-tertiary);margin-bottom:3px;word-break:break-all;}
+  .cat-item-location{font-size:12px;color:var(--text-secondary);margin-bottom:8px;}
+  .cat-item-desc{font-size:12px;color:var(--text-secondary);font-style:italic;margin-bottom:8px;}
+  .cat-btn-row{display:flex;gap:6px;flex-wrap:wrap;}
+  .cat-quick-btn{font-size:12px;padding:5px 10px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);cursor:pointer;font-family:var(--font);transition:all 0.15s;}
+  .cat-quick-btn:hover{background:var(--blue);color:#fff;border-color:transparent;}
+  .cat-quick-btn.selected{background:var(--green);color:#fff;border-color:transparent;}
+  .cat-skip-btn{font-size:11px;padding:4px 10px;border-radius:var(--radius-md);border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-tertiary);cursor:pointer;font-family:var(--font);}
   /* Duplicate scanner panel */
   #dup-scan-panel{position:fixed;top:0;right:-440px;width:420px;height:100vh;background:var(--bg-primary);border-left:0.5px solid var(--border-mid);z-index:1000;transition:right 0.3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.1);}
   #dup-scan-panel.open{right:0;}
@@ -380,6 +400,10 @@
         <span id="review-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;">0</span>
       </button>
 
+      <button class="icon-btn marketer-only" id="cat-panel-btn" onclick="openCatPanel()" title="Categorize uncategorized photos" style="position:relative">
+        <i class="ti ti-tag"></i> Categorize
+        <span id="uncat-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--amber);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;"></span>
+      </button>
       <button class="icon-btn marketer-only" id="dup-scan-btn" onclick="openDupScanPanel()" style="position:relative">
         <i class="ti ti-copy-off"></i> Dupes
         <span id="dup-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;">0</span>
@@ -528,6 +552,16 @@
       All caught up — no photos waiting for review.
     </div>
   </div>
+</div>
+
+<!-- Categorize panel -->
+<div id="cat-panel">
+  <div id="cat-panel-header">
+    <h3>Categorize Photos <span id="cat-panel-count" style="color:var(--text-tertiary);font-weight:400;font-size:13px"></span></h3>
+    <button id="cat-panel-close" onclick="closeCatPanel()"><i class="ti ti-x"></i></button>
+  </div>
+  <div id="cat-progress-bar"><div id="cat-progress-fill" style="width:0%"></div></div>
+  <div id="cat-panel-body"></div>
 </div>
 
 <!-- Duplicate scanner panel -->
@@ -1175,6 +1209,7 @@ function updateStats(){
   document.getElementById('stats').textContent=`${unused} unused · ${used} used`;
   checkNoPhotos();
   updateLastUpload();
+  updateUncatBadge();
 }
 function updateLastUpload(){
   const el=document.getElementById('last-upload');
@@ -2740,6 +2775,13 @@ function renderReviewPanel(){
       </div>`;
     body.appendChild(card);
   });
+  // Event delegation — avoids all onclick quote issues
+  body.onclick=function(e){
+    const qBtn=e.target.closest('.cat-quick-btn');
+    const sBtn=e.target.closest('.cat-skip-btn');
+    if(qBtn&&qBtn.dataset.id&&qBtn.dataset.cat)setCatFromPanel(qBtn.dataset.id,qBtn.dataset.cat);
+    if(sBtn&&sBtn.dataset.id)skipCatItem(sBtn.dataset.id);
+  };
 }
 
 window.openLightboxUrl=function(src){
@@ -3429,6 +3471,132 @@ window.applyBulkReviewBrand=function(){
   renderReviewPanel();
   const label=brandLabels[brand]||brand;
   toast(`All ${techReview.length} photos set to ${label}.`);
+};
+
+// ============================================================
+// CATEGORIZE PANEL
+// ============================================================
+function updateUncatBadge(){
+  const badge=document.getElementById('uncat-badge');
+  if(!badge)return;
+  const count=photos.filter(p=>!p.category).length;
+  badge.textContent=count;
+  badge.style.display=count>0?'flex':'none';
+  badge.style.alignItems='center';
+  badge.style.justifyContent='center';
+}
+
+function openCatPanel(){
+  document.getElementById('cat-panel').classList.add('open');
+  renderCatPanel();
+}
+
+function closeCatPanel(){
+  document.getElementById('cat-panel').classList.remove('open');
+}
+
+function renderCatPanel(){
+  const body=document.getElementById('cat-panel-body');
+  const countEl=document.getElementById('cat-panel-count');
+  const progressFill=document.getElementById('cat-progress-fill');
+  if(!body)return;
+
+  const uncategorized=photos.filter(p=>!p.category);
+  const total=photos.length;
+  const done=total-uncategorized.length;
+  const pct=total>0?Math.round(done/total*100):0;
+
+  if(countEl)countEl.textContent='('+uncategorized.length+' remaining)';
+  if(progressFill)progressFill.style.width=pct+'%';
+
+  if(!uncategorized.length){
+    body.innerHTML='<div style="text-align:center;padding:48px 20px;color:var(--text-secondary);"><i class="ti ti-check" style="font-size:40px;color:var(--green);display:block;margin-bottom:12px"></i>All '+total+' photos categorized!</div>';
+    return;
+  }
+
+  body.innerHTML='';
+  uncategorized.forEach(p=>{
+    const marketLabel=p.market?p.market:'Unknown location';
+    const card=document.createElement('div');
+    card.className='cat-item';
+    card.id='cat-item-'+p.id;
+    // Build card using DOM to avoid quote issues
+    if(p.thumb){
+      const img=document.createElement('img');
+      img.src=p.thumb;img.alt=p.name;
+      img.style.cssText='width:100%;height:180px;object-fit:cover;display:block;cursor:zoom-in;';
+      img.onclick=()=>openLightboxUrl(p.thumb);
+      card.appendChild(img);
+    }else{
+      const ph=document.createElement('div');
+      ph.style.cssText='height:180px;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);';
+      ph.innerHTML='<i class="ti ti-photo" style="font-size:32px"></i>';
+      card.appendChild(ph);
+    }
+    const body2=document.createElement('div');
+    body2.className='cat-item-body';
+    body2.innerHTML=
+      '<div class="cat-item-name">'+p.name+'</div>'+
+      '<div class="cat-item-location"><i class="ti ti-map-pin" style="font-size:11px"></i> '+marketLabel+'</div>'+
+      (p.desc?'<div class="cat-item-desc">"'+p.desc+'"</div>':'')+
+      '<div class="cat-btn-row">'+
+        '<button class="cat-quick-btn" data-id="'+p.id+'" data-cat="truck">🚛 Truck</button>'+
+        '<button class="cat-quick-btn" data-id="'+p.id+'" data-cat="insect">🦟 Insect</button>'+
+        '<button class="cat-quick-btn" data-id="'+p.id+'" data-cat="technician">👷 Technician</button>'+
+        '<button class="cat-quick-btn" data-id="'+p.id+'" data-cat="misc">📦 Misc</button>'+
+        '<button class="cat-skip-btn" data-id="'+p.id+'">Skip</button>'+
+      '</div>';
+    card.appendChild(body2);
+    body.appendChild(card);
+  });
+  // Event delegation — avoids all onclick quote issues
+  body.onclick=function(e){
+    const qBtn=e.target.closest('.cat-quick-btn');
+    const sBtn=e.target.closest('.cat-skip-btn');
+    if(qBtn&&qBtn.dataset.id&&qBtn.dataset.cat)setCatFromPanel(qBtn.dataset.id,qBtn.dataset.cat);
+    if(sBtn&&sBtn.dataset.id)skipCatItem(sBtn.dataset.id);
+  };
+}
+
+window.setCatFromPanel=function(id,cat){
+  const p=photos.find(x=>x.id===id);
+  if(!p)return;
+  p.category=cat;
+  save();
+  if(oauthToken)saveToDrive();
+  // Animate card out
+  const card=document.getElementById('cat-item-'+id);
+  if(card){
+    card.style.opacity='0';
+    card.style.transform='translateX(20px)';
+    card.style.transition='all 0.25s';
+    setTimeout(()=>{
+      card.remove();
+      // Update count and progress
+      const remaining=photos.filter(p=>!p.category).length;
+      const total=photos.length;
+      const done=total-remaining;
+      const pct=total>0?Math.round(done/total*100):0;
+      const countEl=document.getElementById('cat-panel-count');
+      const progressFill=document.getElementById('cat-progress-fill');
+      if(countEl)countEl.textContent='('+remaining+' remaining)';
+      if(progressFill)progressFill.style.width=pct+'%';
+      if(remaining===0){
+        const body=document.getElementById('cat-panel-body');
+        if(body)body.innerHTML='<div style="text-align:center;padding:48px 20px;color:var(--text-secondary);"><i class="ti ti-check" style="font-size:40px;color:var(--green);display:block;margin-bottom:12px"></i>All '+total+' photos categorized!</div>';
+      }
+      updateUncatBadge();
+    },250);
+  }
+};
+
+window.skipCatItem=function(id){
+  const card=document.getElementById('cat-item-'+id);
+  if(card){
+    card.style.opacity='0.3';
+    card.style.transition='opacity 0.2s';
+    setTimeout(()=>{card.style.opacity='1';},500);
+  }
 };
 
 loadConfig();load();loadPickerApi();
