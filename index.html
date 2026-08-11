@@ -375,7 +375,7 @@
       <i class="ti ti-building-plus"></i>
     </button>
     <div class="toolbar-right">
-      <button class="toggle-used marketer-only" id="toggle-used-btn">Show used</button>
+      <button class="toggle-used" id="toggle-used-btn">Show used</button>
       <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
         <button class="cat-btn active" data-cat="all">All types</button>
         <button class="cat-btn" data-cat="truck">🚛 Truck</button>
@@ -3516,11 +3516,16 @@ function updateUncatBadge(){
 
 function openCatPanel(){
   document.getElementById('cat-panel').classList.add('open');
+  // Pause auto-sync while categorizing so it doesn't interrupt
+  if(autoSyncInterval){clearInterval(autoSyncInterval);autoSyncInterval=null;}
   renderCatPanel();
 }
 
 function closeCatPanel(){
   document.getElementById('cat-panel').classList.remove('open');
+  // Final save and restart auto-sync
+  if(oauthToken)saveToDrive();
+  startAutoSync();
 }
 
 function renderCatPanel(){
