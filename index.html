@@ -383,6 +383,7 @@
         <button class="cat-btn" data-cat="technician">👷 Technician</button>
         <button class="cat-btn" data-cat="misc">📦 Misc</button>
         <button class="cat-btn" data-cat="equipment">🔧 Equipment/Gear</button>
+        <button class="cat-btn" data-cat="risk">⚠️ Risk Assessment</button>
       </div>
       <div class="marketer-only" style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);">
         <i class="ti ti-calendar" style="font-size:13px"></i>
@@ -999,6 +1000,7 @@ function buildPhotoCard(p){
       <option value="technician" ${p.category==='technician'?'selected':''}>👷 Technician</option>
       <option value="misc" ${p.category==='misc'?'selected':''}>📦 Misc</option>
       <option value="equipment" ${p.category==='equipment'?'selected':''}>🔧 Equipment/Gear</option>
+      <option value="risk" ${p.category==='risk'?'selected':''}>⚠️ Risk Assessment</option>
     </select>`;
   }
   html+=`</div>`;
@@ -3547,6 +3549,7 @@ function renderCatPanel(){
         '<button class="cat-quick-btn" data-id="'+p.id+'" data-cat="technician">👷 Technician</button>'+
         '<button class="cat-quick-btn" data-id="'+p.id+'" data-cat="misc">📦 Misc</button>'+
         '<button class="cat-quick-btn" data-id="'+p.id+'" data-cat="equipment">🔧 Equipment/Gear</button>'+
+        '<button class="cat-quick-btn" data-id="'+p.id+'" data-cat="risk">⚠️ Risk Assessment</button>'+
         '<button class="cat-skip-btn" data-id="'+p.id+'">Skip</button>'+
       '</div>';
     card.appendChild(body2);
