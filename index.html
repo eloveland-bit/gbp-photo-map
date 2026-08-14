@@ -357,7 +357,7 @@
     <button class="icon-btn success view-hidden" id="upload-btn" onclick="triggerUpload()">
       <i class="ti ti-cloud-upload"></i> Upload
     </button>
-    <input type="file" id="file-input" multiple accept="image/*,video/*" style="display:none">
+    <input type="file" id="file-input" multiple accept="image/*,video/*,video/mp4,video/quicktime,video/mov,video/avi,video/x-msvideo,.mp4,.mov,.avi,.m4v,.heic,.heif" style="display:none">
     <button class="icon-btn primary marketer-only view-hidden" id="drive-btn" onclick="openDrivePicker()">
       <i class="ti ti-brand-google-drive"></i> Add from Drive
     </button>
@@ -1493,7 +1493,10 @@ function getThumb(file){
 
 // Upload flow
 function triggerUpload(){
-  document.getElementById('file-input').click();
+  // Reset accept to allow both images and videos
+  const input=document.getElementById('file-input');
+  input.accept='image/*,video/*,.mp4,.mov,.m4v,.avi,.heic,.heif';
+  input.click();
 }
 
 // Perceptual hash — generates a 64-bit fingerprint from image pixel data
@@ -1686,8 +1689,15 @@ async function processUploadFiles(files){
 
 document.getElementById('file-input').addEventListener('change',(e)=>{
   if(isTechMode){e.target.value='';return;}
-  const files=Array.from(e.target.files).filter(f=>f.type.startsWith('image/')||f.type.startsWith('video/'));
-  processUploadFiles(files);e.target.value='';
+  // Accept all selected files — let processUploadFiles handle filtering
+  const allFiles=Array.from(e.target.files);
+  const files=allFiles.filter(f=>
+    f.type.startsWith('image/')||
+    f.type.startsWith('video/')||
+    f.name.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|heic|heif|mp4|mov|m4v|avi|mkv)$/)
+  );
+  if(files.length)processUploadFiles(files);
+  e.target.value='';
 });
 
 // Drag and drop onto page
