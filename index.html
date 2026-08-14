@@ -357,7 +357,7 @@
     <button class="icon-btn success view-hidden" id="upload-btn" onclick="triggerUpload()">
       <i class="ti ti-cloud-upload"></i> Upload
     </button>
-    <input type="file" id="file-input" multiple accept="image/*" style="display:none">
+    <input type="file" id="file-input" multiple accept="image/*,video/*" style="display:none">
     <button class="icon-btn primary marketer-only view-hidden" id="drive-btn" onclick="openDrivePicker()">
       <i class="ti ti-brand-google-drive"></i> Add from Drive
     </button>
@@ -1682,7 +1682,8 @@ async function processUploadFiles(files){
 
 document.getElementById('file-input').addEventListener('change',(e)=>{
   if(isTechMode){e.target.value='';return;}
-  processUploadFiles(Array.from(e.target.files));e.target.value='';
+  const files=Array.from(e.target.files).filter(f=>f.type.startsWith('image/')||f.type.startsWith('video/'));
+  processUploadFiles(files);e.target.value='';
 });
 
 // Drag and drop onto page
@@ -1699,7 +1700,7 @@ document.addEventListener('drop',(e)=>{
   if(isTechMode)return;
   e.preventDefault();
   document.getElementById('drop-zone-overlay').style.display='none';
-  const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/'));
+  const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/')||f.type.startsWith('video/'));
   if(files.length)processUploadFiles(files);
 });
 
@@ -2539,7 +2540,12 @@ window.submitTechUpload=async function(){
       for(let i=0;i<techSelectedFiles.length;i++){
         const file=techSelectedFiles[i];
         progress.textContent=`Uploading photo ${i+1} of ${total}...`;
-        const [thumb,hash,coords]=await Promise.all([getThumb(file),perceptualHash(file),extractEXIF(file)]);
+        const isVideo=file.type.startsWith('video/');
+    const [thumb,hash,coords]=await Promise.all([
+      getThumb(file),
+      isVideo?Promise.resolve(null):perceptualHash(file),
+      isVideo?Promise.resolve(null):extractEXIF(file)
+    ]);
         const dupMatch=findDuplicate(hash);
         if(dupMatch){
           const proceed=await confirmDuplicate(dupMatch,thumb);
@@ -2663,7 +2669,12 @@ async function scanPendingReviewFolder(){
         });
         const blob=await imgResp.blob();
         const file=new File([blob],f.name,{type:blob.type});
-        const [thumb,hash,coords]=await Promise.all([getThumb(file),perceptualHash(file),extractEXIF(file)]);
+        const isVideo=file.type.startsWith('video/');
+    const [thumb,hash,coords]=await Promise.all([
+      getThumb(file),
+      isVideo?Promise.resolve(null):perceptualHash(file),
+      isVideo?Promise.resolve(null):extractEXIF(file)
+    ]);
         // Don't add if it's a duplicate of something we already have
         const dup=findDuplicate(hash);
         if(dup)continue;
