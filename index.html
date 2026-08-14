@@ -481,10 +481,10 @@
       </div>
       <label class="tech-drop-zone" id="tech-drop-zone" for="tech-file-input" style="cursor:pointer;display:block;">
         <i class="ti ti-camera"></i>
-        <p>Tap to add photos from this job</p>
-        <small>Select one or multiple — JPG or PNG</small>
+        <p>Tap to add photos or videos from this job</p>
+        <small>Photos (JPG, PNG) or Videos (MP4, MOV)</small>
       </label>
-      <input type="file" id="tech-file-input" accept="image/*,image/heic,image/heif" multiple style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">
+      <input type="file" id="tech-file-input" accept="image/*,image/heic,image/heif,video/*" multiple style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">
       <div id="tech-photo-grid" style="display:none;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;"></div>
       <div class="tech-field">
         <label>Your name</label>
@@ -991,7 +991,13 @@ function buildPhotoCard(p){
   const color=brandColors[p.brand]||'#444';
   const label=brandLabels[p.brand]||p.brand;
   let html=`<div class="photo-card">`;
-  if(p.thumb)html+=`<img class="popup-img" src="${p.thumb}" alt="${p.name}" onclick="openLightbox('${p.id}')">`;
+  if(p.thumb==='video'){
+    html+=`<div style="width:100%;height:130px;background:#1a1a18;border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;cursor:pointer;" onclick="downloadPhoto('${p.id}')">
+      <i class="ti ti-player-play" style="font-size:36px;color:#fff"></i>
+    </div>`;
+  }else if(p.thumb){
+    html+=`<img class="popup-img" src="${p.thumb}" alt="${p.name}" onclick="openLightbox('${p.id}')">`;
+  }
   html+=`<div class="popup-name">${p.name}</div>`;
   // Check for duplicates among OTHER photos on the map
   if(p.hash){
@@ -1464,6 +1470,10 @@ function extractEXIF(file){
   });
 }
 function getThumb(file){
+  // For videos, return a placeholder instead of generating a frame
+  if(file.type.startsWith('video/')){
+    return Promise.resolve('video');
+  }
   return new Promise((resolve)=>{
     const reader=new FileReader();
     reader.onload=(e)=>{
@@ -2369,14 +2379,22 @@ function renderTechPhotoGrid(){
   techSelectedFiles.forEach((file,i)=>{
     const wrap=document.createElement('div');
     wrap.className='tech-photo-thumb-wrap';
-    const img=document.createElement('img');
-    img.src=URL.createObjectURL(file);
-    img.alt=file.name;
+    const isVideo=file.type.startsWith('video/');
+    let mediaEl;
+    if(isVideo){
+      mediaEl=document.createElement('div');
+      mediaEl.style.cssText='width:100%;height:100%;background:#1a1a18;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;';
+      mediaEl.innerHTML='<i class="ti ti-player-play"></i>';
+    }else{
+      mediaEl=document.createElement('img');
+      mediaEl.src=URL.createObjectURL(file);
+      mediaEl.alt=file.name;
+    }
     const removeBtn=document.createElement('button');
     removeBtn.className='tech-photo-remove';
     removeBtn.innerHTML='<i class="ti ti-x" style="font-size:10px"></i>';
     removeBtn.onclick=(e)=>{e.stopPropagation();techSelectedFiles.splice(i,1);renderTechPhotoGrid();};
-    wrap.appendChild(img);wrap.appendChild(removeBtn);
+    wrap.appendChild(mediaEl);wrap.appendChild(removeBtn);
     grid.appendChild(wrap);
   });
   if(!techSelectedCoords){
@@ -2433,7 +2451,7 @@ function initTechUploadPage(){
   const fileInput=document.getElementById('tech-file-input');
   if(fileInput){
     fileInput.addEventListener('change',(e)=>{
-      const newFiles=Array.from(e.target.files).filter(f=>f.type.startsWith('image/')||f.type.startsWith('image/heic')||f.name.toLowerCase().endsWith('.heic')||f.name.toLowerCase().endsWith('.heif'));
+      const newFiles=Array.from(e.target.files).filter(f=>f.type.startsWith('image/')||f.type.startsWith('video/')||f.name.toLowerCase().endsWith('.heic')||f.name.toLowerCase().endsWith('.heif')||f.name.toLowerCase().endsWith('.mov')||f.name.toLowerCase().endsWith('.mp4'));
       if(newFiles.length){
         techSelectedFiles=[...techSelectedFiles,...newFiles];
         renderTechPhotoGrid();
@@ -2456,7 +2474,7 @@ function initTechUploadPage(){
     e.preventDefault();e.stopPropagation();
     const dz=document.getElementById('tech-drop-zone');
     if(dz)dz.style.borderColor='';
-    const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/')||f.name.toLowerCase().endsWith('.heic')||f.name.toLowerCase().endsWith('.heif'));
+    const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/')||f.type.startsWith('video/')||f.name.toLowerCase().endsWith('.heic')||f.name.toLowerCase().endsWith('.heif')||f.name.toLowerCase().endsWith('.mov')||f.name.toLowerCase().endsWith('.mp4'));
     if(files.length){techSelectedFiles=[...techSelectedFiles,...files];renderTechPhotoGrid();}
   });
 
@@ -2781,7 +2799,12 @@ function renderReviewPanel(){
     card.className='review-card';
     card.id=`review-card-${p.id}`;
     card.innerHTML=`
-      ${p.thumb?`<img src="${p.thumb}" alt="${p.name}" onclick="openLightboxUrl('${p.thumb}')">` : ''}
+      ${p.thumb==='video'?
+        `<div style="width:100%;height:200px;background:#1a1a18;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <i class="ti ti-player-play" style="font-size:48px;color:#fff"></i>
+        </div>`:
+        p.thumb?`<img src="${p.thumb}" alt="${p.name}" onclick="openLightboxUrl('${p.thumb}')">`:''
+      }
       <div class="review-card-body">
         <div class="review-card-name">${p.name}</div>
         <span class="review-card-brand" style="background:${color}">${label}</span>
