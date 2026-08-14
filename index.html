@@ -1627,17 +1627,21 @@ async function processUploadFiles(files){
     let added=0,noGps=0,failed=0;
     for(let i=0;i<files.length;i++){
       const file=files[i];
-      if(!file.type.startsWith('image/'))continue;
+      const isVideo=file.type.startsWith('video/');
       updateLoadingProgress(`${i+1} of ${files.length} — ${file.name}`);
       try{
-        const [thumb,coords,hash]=await Promise.all([getThumb(file),extractEXIF(file),perceptualHash(file)]);
-        // Check for duplicate by content fingerprint (ignores filename)
-        const dupMatch=findDuplicate(hash);
-        if(dupMatch){
-          hideLoading();
-          const proceed=await confirmDuplicate(dupMatch,thumb);
-          showLoading(`Uploading to Drive...`,`${i+1} of ${files.length}`);
-          if(!proceed)continue;
+        const thumb=isVideo?'video':await getThumb(file);
+        const coords=isVideo?null:await extractEXIF(file);
+        const hash=isVideo?null:await perceptualHash(file);
+        // Duplicate check — skip for videos
+        if(!isVideo&&hash){
+          const dupMatch=findDuplicate(hash);
+          if(dupMatch){
+            hideLoading();
+            const proceed=await confirmDuplicate(dupMatch,thumb);
+            showLoading(`Uploading to Drive...`,`${i+1} of ${files.length}`);
+            if(!proceed)continue;
+          }
         }
         const brand=guessBrand(file.name);
         const id=Date.now()+Math.random().toString(36).slice(2);
