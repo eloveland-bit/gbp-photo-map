@@ -703,10 +703,11 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'�
 // Marker cluster group — handles overlapping pins and spiderfying
 const clusterGroup=L.markerClusterGroup({
   showCoverageOnHover:false,
-  maxClusterRadius:20,
+  maxClusterRadius:60,
   spiderfyOnMaxZoom:true,
-  spiderfyDistanceMultiplier:2,
-  disableClusteringAtZoom:14,
+  spiderfyDistanceMultiplier:3,
+  zoomToBoundsOnClick:false,
+  disableClusteringAtZoom:18,
   iconCreateFunction:function(cluster){
     const count=cluster.getChildCount();
     return L.divIcon({
@@ -715,13 +716,18 @@ const clusterGroup=L.markerClusterGroup({
     });
   }
 });
-// Open list view when clicking a cluster — zoom in first, list only at max zoom
+// Smart cluster click — zoom in progressively, spiderfy at zoom 17, list at max zoom
 clusterGroup.on('clusterclick',function(e){
   const currentZoom=map.getZoom();
-  const maxZoom=map.getMaxZoom();
-  // If not at max zoom yet, just zoom in
+  // Zoom in until we reach 17
   if(currentZoom < 17){
-    e.layer.zoomToBounds({padding:[50,50]});
+    map.setView(e.layer.getLatLng(), currentZoom+2, {animate:true});
+    L.DomEvent.stopPropagation(e);
+    return;
+  }
+  // At zoom 17+ — try to spiderfy first
+  if(e.layer.spiderfy){
+    e.layer.spiderfy();
     L.DomEvent.stopPropagation(e);
     return;
   }
