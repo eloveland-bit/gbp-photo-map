@@ -706,7 +706,7 @@ const clusterGroup=L.markerClusterGroup({
   maxClusterRadius:20,
   spiderfyOnMaxZoom:true,
   spiderfyDistanceMultiplier:2,
-  disableClusteringAtZoom:16,
+  disableClusteringAtZoom:14,
   iconCreateFunction:function(cluster){
     const count=cluster.getChildCount();
     return L.divIcon({
@@ -715,12 +715,19 @@ const clusterGroup=L.markerClusterGroup({
     });
   }
 });
-// Open list view when clicking a cluster
+// Open list view when clicking a cluster — zoom in first, list only at max zoom
 clusterGroup.on('clusterclick',function(e){
+  const currentZoom=map.getZoom();
+  const maxZoom=map.getMaxZoom();
+  // If not at max zoom yet, just zoom in
+  if(currentZoom < 17){
+    e.layer.zoomToBounds({padding:[50,50]});
+    L.DomEvent.stopPropagation(e);
+    return;
+  }
+  // At max zoom — show list popup since we can't zoom further
   const childMarkers=e.layer.getAllChildMarkers();
   const latlng=e.layer.getLatLng();
-  // Collect all photos in this cluster
-  const clusterPhotos=[];
   childMarkers.forEach(function(m){
     const lat=m.getLatLng().lat;
     const lng=m.getLatLng().lng;
