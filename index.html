@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+]<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1286,16 +1286,20 @@ function rebuildLocMarker(key){
     if(visible&&!map.hasLayer(locMarkers[key]))locMarkers[key].addTo(map);
     if(!visible&&map.hasLayer(locMarkers[key]))map.removeLayer(locMarkers[key]);
   }else{
-    const marker=L.marker([ps[0].lat,ps[0].lng],{icon:makeIcon(ps,brand)})
-      .bindPopup(()=>buildPopup(getPhotosAtLoc(key)),{maxWidth:280,minWidth:250});
-    // Radius-based list: if nearby photos exist within 50m, show list instead of single popup
+    const marker=L.marker([ps[0].lat,ps[0].lng],{icon:makeIcon(ps,brand)});
+    // Check radius BEFORE binding popup — intercept click entirely if nearby photos exist
     marker.on('click',function(e){
       const nearby=getPhotosNearby(ps[0].lat,ps[0].lng,50);
       if(nearby.length>2){
         L.DomEvent.stopPropagation(e);
+        map.closePopup();
         showNearbyList(ps[0].lat,ps[0].lng,50);
+      }else{
+        // Open normal popup
+        marker.openPopup();
       }
     });
+    marker.bindPopup(()=>buildPopup(getPhotosAtLoc(key)),{maxWidth:280,minWidth:250});
     if(visible)clusterGroup.addLayer(marker);
     locMarkers[key]=marker;
   }
