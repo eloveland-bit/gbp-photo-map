@@ -3769,7 +3769,7 @@ function showNearbyList(lat,lng,radiusMeters){
   wrap.appendChild(title);
   const hint=document.createElement('div');
   hint.style.cssText='font-size:10px;color:#9b9b97;margin-bottom:8px;';
-  hint.textContent='Tap thumbnail to open · ↓ download · ✓ mark used';
+  hint.textContent='Tap a row to open photo details · ↓ download · ✓ mark used';
   wrap.appendChild(hint);
   nearby.forEach(function(p){
     const row=document.createElement('div');
@@ -3823,6 +3823,23 @@ function showNearbyList(lat,lng,radiusMeters){
     // Buttons
     const btns=document.createElement('div');
     btns.style.cssText='display:flex;flex-direction:column;gap:3px;flex-shrink:0;';
+    // Open button — most important action
+    const openBtn=document.createElement('button');
+    openBtn.textContent='Open';
+    openBtn.title='Open full photo details';
+    openBtn.style.cssText='font-size:11px;padding:2px 7px;border-radius:4px;background:#555;color:#fff;border:none;cursor:pointer;';
+    openBtn.onclick=function(ev){
+      ev.stopPropagation();
+      map.closePopup();
+      const content=document.createElement('div');
+      content.innerHTML=buildPhotoCard(p);
+      L.popup({maxWidth:280,minWidth:250})
+        .setLatLng([p.lat,p.lng])
+        .setContent(content)
+        .openOn(map);
+      map.setView([p.lat,p.lng],17,{animate:false});
+    };
+    btns.appendChild(openBtn);
     if(p.driveId){
       const dl=document.createElement('button');
       dl.textContent='↓';
