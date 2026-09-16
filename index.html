@@ -716,78 +716,18 @@ const clusterGroup=L.markerClusterGroup({
     });
   }
 });
-// Smart cluster click — zoom in progressively, spiderfy at zoom 17, list at max zoom
+// Smart cluster click — show radius list for dense areas
 clusterGroup.on('clusterclick',function(e){
-  const currentZoom=map.getZoom();
-  // Zoom in until we reach 17
-  if(currentZoom < 17){
-    map.setView(e.layer.getLatLng(), currentZoom+2, {animate:true});
-    L.DomEvent.stopPropagation(e);
-    return;
-  }
-  // At zoom 17+ — try to spiderfy first
-  if(e.layer.spiderfy){
-    e.layer.spiderfy();
-    L.DomEvent.stopPropagation(e);
-    return;
-  }
-  // At max zoom — show list popup since we can't zoom further
-  const childMarkers=e.layer.getAllChildMarkers();
   const latlng=e.layer.getLatLng();
-  childMarkers.forEach(function(m){
-    const lat=m.getLatLng().lat;
-    const lng=m.getLatLng().lng;
-    const key=lat.toFixed(5)+','+lng.toFixed(5);
-    const ps=getPhotosAtLoc(key);
-    if(ps)ps.forEach(function(p){clusterPhotos.push(p);});
-  });
-  if(!clusterPhotos.length){e.layer.zoomToBounds();return;}
-  // Build popup using DOM
-  const wrap=document.createElement('div');
-  wrap.style.cssText='max-height:300px;overflow-y:auto;width:260px;';
-  const title=document.createElement('div');
-  title.style.cssText='font-size:12px;font-weight:600;margin-bottom:8px;color:#6b6b67;';
-  title.textContent=clusterPhotos.length+' photos in this area';
-  wrap.appendChild(title);
-  clusterPhotos.forEach(function(p){
-    const row=document.createElement('div');
-    row.style.cssText='display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid rgba(0,0,0,0.08);';
-    // Thumb
-    const isVid=p.thumb==='video';
-    const noThumb=!p.thumb;
-    if(!isVid&&!noThumb){
-      const img=document.createElement('img');
-      img.src=p.thumb;
-      img.style.cssText='width:44px;height:44px;object-fit:cover;border-radius:4px;flex-shrink:0;';
-      row.appendChild(img);
-    }else{
-      const ph=document.createElement('div');
-      ph.style.cssText='width:44px;height:44px;background:#eee;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;';
-      ph.textContent=isVid?'▶':'📷';
-      row.appendChild(ph);
-    }
-    // Info
-    const info=document.createElement('div');
-    info.style.cssText='flex:1;min-width:0;';
-    const name=document.createElement('div');
-    name.style.cssText='font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-    name.textContent=p.name;
-    const sub=document.createElement('div');
-    sub.style.cssText='font-size:10px;color:#9b9b97;';
-    sub.textContent=(brandLabels[p.brand]||p.brand||'')+(p.desc?' · '+p.desc.slice(0,30):'');
-    info.appendChild(name);info.appendChild(sub);
-    row.appendChild(info);
-    // Download button
-    if(p.driveId){
-      const btn=document.createElement('button');
-      btn.textContent='↓';
-      btn.style.cssText='font-size:10px;padding:2px 7px;border-radius:4px;background:#185FA5;color:#fff;border:none;cursor:pointer;flex-shrink:0;';
-      btn.onclick=function(ev){ev.stopPropagation();downloadPhoto(p.id);};
-      row.appendChild(btn);
-    }
-    wrap.appendChild(row);
-  });
-  L.popup({maxWidth:280,minWidth:260}).setLatLng(latlng).setContent(wrap).openOn(map);
+  // Always show radius list — increase radius for cluster clicks
+  const nearby=getPhotosNearby(latlng.lat,latlng.lng,200);
+  if(nearby.length>0){
+    L.DomEvent.stopPropagation(e);
+    showNearbyList(latlng.lat,latlng.lng,200);
+    return;
+  }
+  // Fallback — zoom in
+  e.layer.zoomToBounds({padding:[50,50]});
   L.DomEvent.stopPropagation(e);
 });
 clusterGroup.addTo(map);
