@@ -3764,22 +3764,48 @@ function showNearbyList(lat,lng,radiusMeters){
   const wrap=document.createElement('div');
   wrap.style.cssText='max-height:320px;overflow-y:auto;width:270px;';
   const title=document.createElement('div');
-  title.style.cssText='font-size:12px;font-weight:600;margin-bottom:8px;color:#6b6b67;padding-bottom:6px;border-bottom:0.5px solid rgba(0,0,0,0.1);';
-  title.textContent=nearby.length+' photos within '+radiusMeters+'m of this pin';
+  title.style.cssText='font-size:12px;font-weight:600;margin-bottom:4px;color:#6b6b67;padding-bottom:6px;border-bottom:0.5px solid rgba(0,0,0,0.1);';
+  title.textContent=nearby.length+' photos within '+radiusMeters+'m';
   wrap.appendChild(title);
+  const hint=document.createElement('div');
+  hint.style.cssText='font-size:10px;color:#9b9b97;margin-bottom:8px;';
+  hint.textContent='Tap thumbnail to open · ↓ download · ✓ mark used';
+  wrap.appendChild(hint);
   nearby.forEach(function(p){
     const row=document.createElement('div');
     row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid rgba(0,0,0,0.06);cursor:pointer;';
-    // Thumb
+    // Thumb — click opens full popup
     if(p.thumb&&p.thumb!=='video'){
       const img=document.createElement('img');
       img.src=p.thumb;
-      img.style.cssText='width:48px;height:48px;object-fit:cover;border-radius:5px;flex-shrink:0;';
+      img.style.cssText='width:48px;height:48px;object-fit:cover;border-radius:5px;flex-shrink:0;cursor:pointer;';
+      img.title='Click to open full details';
+    img.onclick=function(){
+      map.closePopup();
+      // Build and show a direct popup for this specific photo
+      const content=document.createElement('div');
+      content.innerHTML=buildPhotoCard(p);
+      L.popup({maxWidth:280,minWidth:250})
+        .setLatLng([p.lat,p.lng])
+        .setContent(content)
+        .openOn(map);
+      map.setView([p.lat,p.lng],17,{animate:true});
+    };
       row.appendChild(img);
     }else{
       const ph=document.createElement('div');
-      ph.style.cssText='width:48px;height:48px;background:#eee;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;';
+      ph.style.cssText='width:48px;height:48px;background:#eee;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;';
       ph.textContent=p.thumb==='video'?'▶':'📷';
+      ph.onclick=function(){
+        map.closePopup();
+        const content=document.createElement('div');
+        content.innerHTML=buildPhotoCard(p);
+        L.popup({maxWidth:280,minWidth:250})
+          .setLatLng([p.lat,p.lng])
+          .setContent(content)
+          .openOn(map);
+        map.setView([p.lat,p.lng],17,{animate:true});
+      };
       row.appendChild(ph);
     }
     // Info
