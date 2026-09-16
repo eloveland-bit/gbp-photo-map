@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GBP Photo Inventory Map</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <style>
   :root {
@@ -697,6 +700,21 @@ const DRIVE_DATA_FILENAME='gbp-map-data.json';
 const savedMapPos=(()=>{try{const p=localStorage.getItem('gbp_map_position');return p?JSON.parse(p):null;}catch(e){return null;}})();
 const map=L.map('map',{zoomControl:true}).setView(savedMapPos?[savedMapPos.lat,savedMapPos.lng]:[35.5,-86.5],savedMapPos?savedMapPos.zoom:6);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);
+// Marker cluster group — handles overlapping pins and spiderfying
+const clusterGroup=L.markerClusterGroup({
+  showCoverageOnHover:false,
+  maxClusterRadius:40,
+  spiderfyOnMaxZoom:true,
+  disableClusteringAtZoom:17,
+  iconCreateFunction:function(cluster){
+    const count=cluster.getChildCount();
+    return L.divIcon({
+      html:'<div style="background:var(--blue);color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">'+count+'</div>',
+      className:'',iconSize:[36,36]
+    });
+  }
+});
+clusterGroup.addTo(map);
 // Save position whenever map moves
 map.on('moveend',()=>{
   const c=map.getCenter();
@@ -907,7 +925,7 @@ async function loadFromDrive(){
       !deletedIds.has(p.id)&&!deletedIds.has(p.driveId)&&
       !allPinnedIds.has(p.id)&&!allPinnedDriveIds.has(p.driveId)
     );
-    Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
+    Object.keys(locMarkers).forEach(k=>{clusterGroup.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
     // Merge drivePhotos with local versions — preserve locally-set fields that may be newer
     const localById=new Map(photos.map(p=>[p.id,p]));
@@ -1181,7 +1199,7 @@ function getPrimaryBrand(ps){
 function rebuildLocMarker(key){
   const ps=getPhotosAtLoc(key);
   if(!ps.length){
-    if(locMarkers[key]){map.removeLayer(locMarkers[key]);delete locMarkers[key];}
+    if(locMarkers[key]){clusterGroup.removeLayer(locMarkers[key]);delete locMarkers[key];}
     return;
   }
   const visible=isLocVisible(key);
@@ -1194,7 +1212,7 @@ function rebuildLocMarker(key){
   }else{
     const marker=L.marker([ps[0].lat,ps[0].lng],{icon:makeIcon(ps,brand)})
       .bindPopup(()=>buildPopup(getPhotosAtLoc(key)),{maxWidth:280,minWidth:250});
-    if(visible)marker.addTo(map);
+    if(visible)clusterGroup.addLayer(marker);
     locMarkers[key]=marker;
   }
 }
@@ -3782,7 +3800,7 @@ async function loadPublicDriveData(){
     const data=await resp.json();
     if(!data.photos||!data.photos.length)throw new Error('No photos in data');
     // Clear and reload with full dataset
-    Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
+    Object.keys(locMarkers).forEach(k=>{clusterGroup.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
     photos=data.photos;
     photos.forEach(p=>addMarker(p));
