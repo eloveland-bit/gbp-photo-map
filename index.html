@@ -44,7 +44,7 @@
   .tb-group{display:flex;align-items:center;gap:5px;flex-shrink:0;}
   .filter-btn{font-size:11px;padding:3px 9px;border-radius:20px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;transition:all 0.15s;font-family:var(--font);white-space:nowrap;}
   .filter-btn.active{border-color:transparent;color:#fff;}
-  /* Category filter pills */
+  .marker-cluster-custom{background:none!important;border:none!important;}
   .cat-btn{font-size:11px;padding:3px 9px;border-radius:20px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;transition:all 0.15s;font-family:var(--font);white-space:nowrap;}
   .cat-btn.active{background:#555;border-color:transparent;color:#fff;}
   .filter-btn[data-brand="all"].active{background:#555;}
@@ -709,9 +709,12 @@ const clusterGroup=L.markerClusterGroup({
   disableClusteringAtZoom:18,
   iconCreateFunction:function(cluster){
     const count=cluster.getChildCount();
+    const size=count<10?36:count<100?40:44;
     return L.divIcon({
-      html:'<div style="background:var(--blue);color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">'+count+'</div>',
-      className:'',iconSize:[36,36]
+      html:'<div style="background:#185FA5;color:#fff;border-radius:50%;width:'+size+'px;height:'+size+'px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;border:2px solid rgba(255,255,255,0.8);box-shadow:0 2px 6px rgba(0,0,0,0.3);font-family:sans-serif;">'+count+'</div>',
+      className:'marker-cluster-custom',
+      iconSize:L.point(size,size),
+      iconAnchor:L.point(size/2,size/2)
     });
   }
 });
