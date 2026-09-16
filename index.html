@@ -704,8 +704,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'Â
 const clusterGroup=L.markerClusterGroup({
   showCoverageOnHover:false,
   maxClusterRadius:60,
-  spiderfyOnMaxZoom:true,
-  spiderfyDistanceMultiplier:3,
+  spiderfyOnMaxZoom:false,
   zoomToBoundsOnClick:false,
   disableClusteringAtZoom:18,
   iconCreateFunction:function(cluster){
