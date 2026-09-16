@@ -1288,6 +1288,14 @@ function rebuildLocMarker(key){
   }else{
     const marker=L.marker([ps[0].lat,ps[0].lng],{icon:makeIcon(ps,brand)})
       .bindPopup(()=>buildPopup(getPhotosAtLoc(key)),{maxWidth:280,minWidth:250});
+    // Radius-based list: if nearby photos exist within 50m, show list instead of single popup
+    marker.on('click',function(e){
+      const nearby=getPhotosNearby(ps[0].lat,ps[0].lng,50);
+      if(nearby.length>2){
+        L.DomEvent.stopPropagation(e);
+        showNearbyList(ps[0].lat,ps[0].lng,50);
+      }
+    });
     if(visible)clusterGroup.addLayer(marker);
     locMarkers[key]=marker;
   }
@@ -3784,6 +3792,93 @@ window.skipCatItem=function(id){
     setTimeout(()=>{card.style.opacity='1';},500);
   }
 };
+
+// Haversine distance between two GPS points in meters
+function gpsDistance(lat1,lng1,lat2,lng2){
+  const R=6371000;
+  const dLat=(lat2-lat1)*Math.PI/180;
+  const dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)*Math.sin(dLat/2)+
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+    Math.sin(dLng/2)*Math.sin(dLng/2);
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// Get all photos within a radius (meters) of a point
+function getPhotosNearby(lat,lng,radiusMeters){
+  return photos.filter(p=>{
+    if(!p.lat||!p.lng)return false;
+    if(!(activeBrand==='all'||p.brand===activeBrand))return false;
+    if(!showUsed&&p.used)return false;
+    return gpsDistance(lat,lng,p.lat,p.lng)<=radiusMeters;
+  });
+}
+
+// Show radius-based list popup
+function showNearbyList(lat,lng,radiusMeters){
+  const nearby=getPhotosNearby(lat,lng,radiusMeters);
+  if(nearby.length<=1)return false; // let normal popup handle single pin
+  const wrap=document.createElement('div');
+  wrap.style.cssText='max-height:320px;overflow-y:auto;width:270px;';
+  const title=document.createElement('div');
+  title.style.cssText='font-size:12px;font-weight:600;margin-bottom:8px;color:#6b6b67;padding-bottom:6px;border-bottom:0.5px solid rgba(0,0,0,0.1);';
+  title.textContent=nearby.length+' photos within '+radiusMeters+'m of this pin';
+  wrap.appendChild(title);
+  nearby.forEach(function(p){
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid rgba(0,0,0,0.06);cursor:pointer;';
+    // Thumb
+    if(p.thumb&&p.thumb!=='video'){
+      const img=document.createElement('img');
+      img.src=p.thumb;
+      img.style.cssText='width:48px;height:48px;object-fit:cover;border-radius:5px;flex-shrink:0;';
+      row.appendChild(img);
+    }else{
+      const ph=document.createElement('div');
+      ph.style.cssText='width:48px;height:48px;background:#eee;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;';
+      ph.textContent=p.thumb==='video'?'▶':'📷';
+      row.appendChild(ph);
+    }
+    // Info
+    const info=document.createElement('div');
+    info.style.cssText='flex:1;min-width:0;';
+    const name=document.createElement('div');
+    name.style.cssText='font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    name.textContent=p.name;
+    const sub=document.createElement('div');
+    sub.style.cssText='font-size:10px;color:#9b9b97;margin-top:1px;';
+    const dist=Math.round(gpsDistance(lat,lng,p.lat,p.lng));
+    sub.textContent=(brandLabels[p.brand]||p.brand||'')+' · '+dist+'m away'+(p.desc?' · '+p.desc.slice(0,20):'');
+    info.appendChild(name);info.appendChild(sub);
+    row.appendChild(info);
+    // Buttons
+    const btns=document.createElement('div');
+    btns.style.cssText='display:flex;flex-direction:column;gap:3px;flex-shrink:0;';
+    if(p.driveId){
+      const dl=document.createElement('button');
+      dl.textContent='↓';
+      dl.title='Download';
+      dl.style.cssText='font-size:11px;padding:2px 7px;border-radius:4px;background:#185FA5;color:#fff;border:none;cursor:pointer;';
+      dl.onclick=function(ev){ev.stopPropagation();downloadPhoto(p.id);};
+      btns.appendChild(dl);
+    }
+    if(!p.used){
+      const mu=document.createElement('button');
+      mu.textContent='✓';
+      mu.title='Mark used';
+      mu.style.cssText='font-size:11px;padding:2px 7px;border-radius:4px;background:#3B6D11;color:#fff;border:none;cursor:pointer;';
+      mu.onclick=function(ev){ev.stopPropagation();markUsed(p.id);map.closePopup();};
+      btns.appendChild(mu);
+    }
+    row.appendChild(btns);
+    wrap.appendChild(row);
+  });
+  L.popup({maxWidth:300,minWidth:270})
+    .setLatLng([lat,lng])
+    .setContent(wrap)
+    .openOn(map);
+  return true;
+}
 
 loadConfig();load();loadPickerApi();
 loadCompanies();
