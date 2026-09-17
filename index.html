@@ -1228,9 +1228,10 @@ function rebuildLocMarker(key){
     const marker=L.marker([ps[0].lat,ps[0].lng],{icon:makeIcon(ps,brand)});
     // Check radius BEFORE binding popup — intercept click entirely if nearby photos exist
     marker.on('click',function(e){
-      const nearby=getPhotosNearby(ps[0].lat,ps[0].lng,50);
-      if(nearby.length>=20){
-        // 20+ photos within 50m — open side panel
+      // Use unfiltered count for threshold — so dense areas always trigger panel
+      const nearbyAll=getPhotosNearbyAll(ps[0].lat,ps[0].lng,50);
+      if(nearbyAll.length>=5){
+        // 5+ photos within 50m — open side panel with all nearby
         L.DomEvent.stopPropagation(e);
         map.closePopup();
         openNearbyPanel(ps[0].lat,ps[0].lng,50);
@@ -3748,7 +3749,15 @@ function gpsDistance(lat1,lng1,lat2,lng2){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-// Get all photos within a radius (meters) of a point
+// Get all photos within a radius — unfiltered for threshold check
+function getPhotosNearbyAll(lat,lng,radiusMeters){
+  return photos.filter(p=>{
+    if(!p.lat||!p.lng)return false;
+    return gpsDistance(lat,lng,p.lat,p.lng)<=radiusMeters;
+  });
+}
+
+// Get photos within a radius respecting active filters
 function getPhotosNearby(lat,lng,radiusMeters){
   return photos.filter(p=>{
     if(!p.lat||!p.lng)return false;
@@ -3761,7 +3770,7 @@ function getPhotosNearby(lat,lng,radiusMeters){
 
 // Nearby side panel
 function openNearbyPanel(lat,lng,radiusMeters){
-  const nearby=getPhotosNearby(lat,lng,radiusMeters);
+  const nearby=getPhotosNearbyAll(lat,lng,radiusMeters);
   if(!nearby.length)return;
   const panel=document.getElementById('nearby-panel');
   const body=document.getElementById('nearby-panel-body');
