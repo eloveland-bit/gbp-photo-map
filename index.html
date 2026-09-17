@@ -931,7 +931,7 @@ async function loadFromDrive(){
     photos = [...mergedPhotos, ...localOnly];
     pending = [...filteredDrivePending, ...localPendingOnly];
     techReview = [...driveTechReview, ...localTechReviewOnly];
-    photos.forEach(p=>addMarker(p));
+    rebuildAllMarkersWithProximity();
 
     // If we had local-only items OR deletedIds filtered items out, push merged state back to Drive immediately
     const driveHadDeletedItems = (data.pending||[]).length > filteredDrivePending.length ||
@@ -1202,6 +1202,75 @@ function rebuildLocMarker(key){
   }
 }
 
+// Group photos within 50m radius into a single pin location
+// Returns a map of canonical lat/lng key -> array of photo IDs
+function buildProximityGroups(){
+  const RADIUS=50; // meters
+  const assigned=new Set();
+  const groups=[]; // [{lat,lng,ids:[]}]
+  photos.forEach(p=>{
+    if(assigned.has(p.id))return;
+    if(!p.lat||!p.lng)return;
+    // Find all photos within radius
+    const nearby=photos.filter(q=>
+      !assigned.has(q.id)&&q.lat&&q.lng&&
+      gpsDistance(p.lat,p.lng,q.lat,q.lng)<=RADIUS
+    );
+    if(!nearby.length)return;
+    // Use centroid as pin location
+    const avgLat=nearby.reduce((s,q)=>s+parseFloat(q.lat),0)/nearby.length;
+    const avgLng=nearby.reduce((s,q)=>s+parseFloat(q.lng),0)/nearby.length;
+    const group={lat:avgLat,lng:avgLng,ids:nearby.map(q=>q.id)};
+    groups.push(group);
+    nearby.forEach(q=>assigned.add(q.id));
+  });
+  return groups;
+}
+
+// Override locKey to use proximity group key for a photo
+const _proximityCache={};
+function getProximityKey(p){
+  return _proximityCache[p.id]||locKey(p);
+}
+
+function rebuildAllMarkersWithProximity(){
+  // Clear existing markers
+  Object.keys(locMarkers).forEach(k=>{
+    if(map.hasLayer(locMarkers[k]))map.removeLayer(locMarkers[k]);
+  });
+  Object.keys(locMarkers).forEach(k=>delete locMarkers[k]);
+  Object.keys(markers).forEach(k=>delete markers[k]);
+  // Clear cache
+  Object.keys(_proximityCache).forEach(k=>delete _proximityCache[k]);
+  // Build groups
+  const groups=buildProximityGroups();
+  groups.forEach(group=>{
+    const key=parseFloat(group.lat).toFixed(5)+','+parseFloat(group.lng).toFixed(5);
+    // Map each photo ID to this group key
+    group.ids.forEach(id=>_proximityCache[id]=key);
+    const ps=photos.filter(p=>group.ids.includes(p.id));
+    if(!ps.length)return;
+    const brand=getPrimaryBrand(ps);
+    const visible=ps.some(p=>
+      (activeBrand==='all'||p.brand===activeBrand)&&
+      (showUsed||!p.used)&&
+      isWithinDateFilter(p)&&
+      (activeCategory==='all'||p.category===activeCategory)
+    );
+    if(!locMarkers[key]){
+      const marker=L.marker([group.lat,group.lng],{icon:makeIcon(ps,brand)})
+        .bindPopup(()=>buildProximityPopup(key),{maxWidth:300,minWidth:260});
+      if(visible)marker.addTo(map);
+      locMarkers[key]=marker;
+    }
+  });
+}
+
+function buildProximityPopup(key){
+  const ps=photos.filter(p=>getProximityKey(p)===key);
+  return buildPopup(ps);
+}
+
 function addMarker(p){
   // store on markers for legacy lookups, but visual is handled by locMarkers
   markers[p.id]=true;
@@ -1231,8 +1300,7 @@ function isWithinDateFilter(p){
 }
 
 function applyFilters(){
-  const keys=new Set(photos.map(p=>locKey(p)));
-  keys.forEach(k=>rebuildLocMarker(k));
+  rebuildAllMarkersWithProximity();
   updateStats();
 }
 function updateStats(){
@@ -3909,7 +3977,7 @@ async function loadPublicDriveData(){
       const cached=JSON.parse(r);
       if(Array.isArray(cached)&&cached.length>0){
         photos=cached;
-        photos.forEach(p=>addMarker(p));
+        rebuildAllMarkersWithProximity();
         updateStats();checkNoPhotos();
       }
     }
@@ -3925,7 +3993,7 @@ async function loadPublicDriveData(){
     Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
     photos=data.photos;
-    photos.forEach(p=>addMarker(p));
+    rebuildAllMarkersWithProximity();
     // Cache for next time
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify(photos));}catch(e){}
     updateStats();checkNoPhotos();
