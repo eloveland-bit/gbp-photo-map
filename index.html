@@ -5,11 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GBP Photo Inventory Map</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <style>
   :root {
@@ -44,7 +41,7 @@
   .tb-group{display:flex;align-items:center;gap:5px;flex-shrink:0;}
   .filter-btn{font-size:11px;padding:3px 9px;border-radius:20px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;transition:all 0.15s;font-family:var(--font);white-space:nowrap;}
   .filter-btn.active{border-color:transparent;color:#fff;}
-  .marker-cluster-custom{background:none!important;border:none!important;}
+
   .cat-btn{font-size:11px;padding:3px 9px;border-radius:20px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;transition:all 0.15s;font-family:var(--font);white-space:nowrap;}
   .cat-btn.active{background:#555;border-color:transparent;color:#fff;}
   .filter-btn[data-brand="all"].active{background:#555;}
@@ -701,38 +698,8 @@ const savedMapPos=(()=>{try{const p=localStorage.getItem('gbp_map_position');ret
 const map=L.map('map',{zoomControl:true}).setView(savedMapPos?[savedMapPos.lat,savedMapPos.lng]:[35.5,-86.5],savedMapPos?savedMapPos.zoom:6);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);
 // Marker cluster group — handles overlapping pins and spiderfying
-const clusterGroup=L.markerClusterGroup({
-  showCoverageOnHover:false,
-  maxClusterRadius:60,
-  spiderfyOnMaxZoom:false,
-  zoomToBoundsOnClick:false,
-  disableClusteringAtZoom:18,
-  iconCreateFunction:function(cluster){
-    const count=cluster.getChildCount();
-    const size=count<10?36:count<100?40:44;
-    return L.divIcon({
-      html:'<div style="background:#185FA5;color:#fff;border-radius:50%;width:'+size+'px;height:'+size+'px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;border:2px solid rgba(255,255,255,0.8);box-shadow:0 2px 6px rgba(0,0,0,0.3);font-family:sans-serif;">'+count+'</div>',
-      className:'marker-cluster-custom',
-      iconSize:L.point(size,size),
-      iconAnchor:L.point(size/2,size/2)
-    });
-  }
-});
-// Smart cluster click — show radius list for dense areas
-clusterGroup.on('clusterclick',function(e){
-  const latlng=e.layer.getLatLng();
-  // Always show radius list — increase radius for cluster clicks
-  const nearby=getPhotosNearby(latlng.lat,latlng.lng,200);
-  if(nearby.length>0){
-    L.DomEvent.stopPropagation(e);
-    showNearbyList(latlng.lat,latlng.lng,200);
-    return;
-  }
-  // Fallback — zoom in
-  e.layer.zoomToBounds({padding:[50,50]});
-  L.DomEvent.stopPropagation(e);
-});
-clusterGroup.addTo(map);
+// Simple layer group — no clustering, radius list popup handles dense areas
+const clusterGroup=L.layerGroup().addTo(map);
 // Save position whenever map moves
 map.on('moveend',()=>{
   const c=map.getCenter();
@@ -943,7 +910,7 @@ async function loadFromDrive(){
       !deletedIds.has(p.id)&&!deletedIds.has(p.driveId)&&
       !allPinnedIds.has(p.id)&&!allPinnedDriveIds.has(p.driveId)
     );
-    Object.keys(locMarkers).forEach(k=>{clusterGroup.removeLayer(locMarkers[k]);});
+    Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
     // Merge drivePhotos with local versions — preserve locally-set fields that may be newer
     const localById=new Map(photos.map(p=>[p.id,p]));
@@ -1242,7 +1209,7 @@ function rebuildLocMarker(key){
       }
     });
     marker.bindPopup(()=>buildPopup(getPhotosAtLoc(key)),{maxWidth:280,minWidth:250});
-    if(visible)clusterGroup.addLayer(marker);
+    if(visible)marker.addTo(map);
     locMarkers[key]=marker;
   }
 }
@@ -3960,7 +3927,7 @@ async function loadPublicDriveData(){
     const data=await resp.json();
     if(!data.photos||!data.photos.length)throw new Error('No photos in data');
     // Clear and reload with full dataset
-    Object.keys(locMarkers).forEach(k=>{clusterGroup.removeLayer(locMarkers[k]);});
+    Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
     photos=data.photos;
     photos.forEach(p=>addMarker(p));
