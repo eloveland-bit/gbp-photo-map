@@ -2330,18 +2330,16 @@ window.changeCategory=function(id,newCat){
     geotagged:ph.geotagged||false,category:ph.category||null
   }))));}catch(e){}
   save();if(oauthToken)saveToDrive();
-  map.closePopup();
   toast(newCat?'Category set to '+newCat+'.':'Category cleared.');
 };
 
 window.changeBrand=function(id,newBrand){
   const p=photos.find(x=>x.id===id);if(!p)return;
-  const oldKey=locKey(p);
   p.brand=newBrand;
   save();
   if(oauthToken)saveToDrive();
-  rebuildLocMarker(oldKey);
-  map.closePopup();
+  // Update map pin silently without closing popup
+  setTimeout(()=>rebuildAllMarkersWithProximity(),100);
   toast('Brand updated.');
 };
 
