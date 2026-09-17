@@ -2338,19 +2338,24 @@ window.changeBrand=function(id,newBrand){
   p.brand=newBrand;
   save();
   if(oauthToken)saveToDrive();
-  // Store current popup content and position before rebuild
-  const currentPopup=map.openPopup;
+  // Save popup state before rebuild
   const popupLatLng=map._popup?map._popup.getLatLng():null;
   const popupContent=map._popup?map._popup.getContent():null;
-  // Rebuild markers
+  // Save scroll position of popup content
+  const popupEl=document.querySelector('.leaflet-popup-content');
+  const scrollTop=popupEl?popupEl.scrollTop:0;
   setTimeout(()=>{
     rebuildAllMarkersWithProximity();
-    // Reopen popup at same position with same content
     if(popupLatLng&&popupContent){
-      L.popup({maxWidth:300,minWidth:260})
+      const pop=L.popup({maxWidth:300,minWidth:260})
         .setLatLng(popupLatLng)
         .setContent(popupContent)
         .openOn(map);
+      // Restore scroll after popup renders
+      setTimeout(()=>{
+        const el=document.querySelector('.leaflet-popup-content');
+        if(el)el.scrollTop=scrollTop;
+      },50);
     }
   },100);
   toast('Brand updated.');
