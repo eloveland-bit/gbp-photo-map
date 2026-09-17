@@ -1010,7 +1010,7 @@ function buildPhotoCard(p){
     }
   }
   html+=`<div class="popup-badges" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span class="popup-brand-badge" style="background:${color}">${label}</span>`;
+    <span class="popup-brand-badge" data-id="${p.id}" style="background:${color}">${label}</span>`;
   if(p.manual)html+=`<span class="popup-source-tag">manual pin</span>`;
   if(!isTechMode&&!isViewMode){
     html+=`<select class="popup-brand-select" onchange="changeBrand('${p.id}',this.value)" style="font-size:11px;padding:2px 5px;border-radius:6px;border:0.5px solid rgba(0,0,0,0.2);background:#fff;color:#1a1a18;cursor:pointer;font-family:var(--font);">
@@ -2338,26 +2338,14 @@ window.changeBrand=function(id,newBrand){
   p.brand=newBrand;
   save();
   if(oauthToken)saveToDrive();
-  // Save popup state before rebuild
-  const popupLatLng=map._popup?map._popup.getLatLng():null;
-  const popupContent=map._popup?map._popup.getContent():null;
-  // Save scroll position of popup content
-  const popupEl=document.querySelector('.leaflet-popup-content');
-  const scrollTop=popupEl?popupEl.scrollTop:0;
-  setTimeout(()=>{
-    rebuildAllMarkersWithProximity();
-    if(popupLatLng&&popupContent){
-      const pop=L.popup({maxWidth:300,minWidth:260})
-        .setLatLng(popupLatLng)
-        .setContent(popupContent)
-        .openOn(map);
-      // Restore scroll after popup renders
-      setTimeout(()=>{
-        const el=document.querySelector('.leaflet-popup-content');
-        if(el)el.scrollTop=scrollTop;
-      },50);
-    }
-  },100);
+  // Update just the brand badge in the open popup — no rebuild, no scroll reset
+  const badge=document.querySelector(`.popup-brand-badge[data-id="${id}"]`);
+  if(badge){
+    badge.style.background=brandColors[newBrand]||'#444';
+    badge.textContent=brandLabels[newBrand]||newBrand;
+  }
+  // Update map pin in background after a delay
+  setTimeout(()=>rebuildAllMarkersWithProximity(),500);
   toast('Brand updated.');
 };
 
