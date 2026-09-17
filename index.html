@@ -258,8 +258,8 @@
   .btn-dup-keep:hover{background:#2d5509;}
   .btn-dup-skip-pair{width:100%;font-size:11px;padding:4px;border-radius:6px;background:var(--bg-primary);color:var(--text-secondary);border:0.5px solid var(--border-mid);cursor:pointer;font-family:var(--font);margin-top:8px;}
   /* Nearby photo side panel */
-  #nearby-panel{position:fixed;top:0;left:-380px;width:360px;height:100vh;background:var(--bg-primary);border-right:0.5px solid var(--border-mid);z-index:1000;transition:left 0.3s ease;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,0.1);}
-  #nearby-panel.open{left:0;}
+  #nearby-panel{position:fixed;top:0;right:-380px;width:360px;height:100vh;background:var(--bg-primary);border-left:0.5px solid var(--border-mid);z-index:1000;transition:right 0.3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.1);}
+  #nearby-panel.open{right:0;}
   #nearby-panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:0.5px solid var(--border-light);flex-shrink:0;background:var(--bg-secondary);}
   #nearby-panel-title{font-size:14px;font-weight:500;color:var(--text-primary);}
   #nearby-panel-count{font-size:12px;color:var(--text-tertiary);font-weight:400;}
@@ -3809,43 +3809,33 @@ function openNearbyPanel(lat,lng,radiusMeters){
     badge.textContent=brandLabels[p.brand]||p.brand;
     info.appendChild(name);info.appendChild(sub);info.appendChild(badge);
     item.appendChild(info);
-    // Buttons
-    const btns=document.createElement('div');
-    btns.className='nearby-item-btns';
-    // Open button
-    const openBtn=document.createElement('button');
-    openBtn.className='nearby-item-btn';
-    openBtn.style.background='#555';
-    openBtn.textContent='Open';
-    openBtn.onclick=function(ev){
-      ev.stopPropagation();
-      closeNearbyPanel();
-      const c=document.createElement('div');
-      c.innerHTML=buildPhotoCard(p);
-      L.popup({maxWidth:280,minWidth:250})
-        .setLatLng([p.lat,p.lng])
-        .setContent(c)
-        .openOn(map);
-      map.setView([p.lat,p.lng],17,{animate:false});
+    // Brand dropdown
+    const sel=document.createElement('select');
+    sel.style.cssText='font-size:11px;padding:3px 5px;border-radius:5px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);font-family:var(--font);cursor:pointer;max-width:110px;';
+    // Built-in brands
+    [['mosquito','Mosquito Squad'],['lawn','Lawn Squad'],['newage','New Age Lights']].forEach(function(b){
+      const opt=document.createElement('option');
+      opt.value=b[0];opt.textContent=b[1];
+      if(p.brand===b[0])opt.selected=true;
+      sel.appendChild(opt);
+    });
+    // Custom companies
+    companies.forEach(function(co){
+      const opt=document.createElement('option');
+      opt.value=co.id;opt.textContent=co.name;
+      if(p.brand===co.id)opt.selected=true;
+      sel.appendChild(opt);
+    });
+    sel.onchange=function(){
+      const oldKey=locKey(p);
+      p.brand=sel.value;
+      save();if(oauthToken)saveToDrive();
+      rebuildLocMarker(oldKey);
+      // Update badge color
+      badge.style.background=brandColors[p.brand]||'#444';
+      badge.textContent=brandLabels[p.brand]||p.brand;
     };
-    btns.appendChild(openBtn);
-    if(p.driveId){
-      const dl=document.createElement('button');
-      dl.className='nearby-item-btn';
-      dl.style.background='#185FA5';
-      dl.textContent='↓';dl.title='Download';
-      dl.onclick=function(ev){ev.stopPropagation();downloadPhoto(p.id);};
-      btns.appendChild(dl);
-    }
-    if(!p.used){
-      const mu=document.createElement('button');
-      mu.className='nearby-item-btn';
-      mu.style.background='#3B6D11';
-      mu.textContent='✓';mu.title='Mark used';
-      mu.onclick=function(ev){ev.stopPropagation();markUsed(p.id);mu.style.opacity='0.4';mu.disabled=true;};
-      btns.appendChild(mu);
-    }
-    item.appendChild(btns);
+    item.appendChild(sel);
     body.appendChild(item);
   });
   panel.classList.add('open');
