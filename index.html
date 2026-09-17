@@ -2338,8 +2338,21 @@ window.changeBrand=function(id,newBrand){
   p.brand=newBrand;
   save();
   if(oauthToken)saveToDrive();
-  // Update map pin silently without closing popup
-  setTimeout(()=>rebuildAllMarkersWithProximity(),100);
+  // Store current popup content and position before rebuild
+  const currentPopup=map.openPopup;
+  const popupLatLng=map._popup?map._popup.getLatLng():null;
+  const popupContent=map._popup?map._popup.getContent():null;
+  // Rebuild markers
+  setTimeout(()=>{
+    rebuildAllMarkersWithProximity();
+    // Reopen popup at same position with same content
+    if(popupLatLng&&popupContent){
+      L.popup({maxWidth:300,minWidth:260})
+        .setLatLng(popupLatLng)
+        .setContent(popupContent)
+        .openOn(map);
+    }
+  },100);
   toast('Brand updated.');
 };
 
