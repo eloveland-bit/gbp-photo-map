@@ -1222,25 +1222,24 @@ function rebuildLocMarker(key){
   if(locMarkers[key]){
     locMarkers[key].setIcon(makeIcon(ps,brand));
     locMarkers[key].setPopupContent(()=>buildPopup(getPhotosAtLoc(key)));
+    locMarkers[key].off('popupopen');
+    locMarkers[key].on('popupopen',function(){
+      const nearbyAll=getPhotosNearbyAll(ps[0].lat,ps[0].lng,50);
+      if(nearbyAll.length>=5){map.closePopup();openNearbyPanel(ps[0].lat,ps[0].lng,50);}
+    });
     if(visible&&!map.hasLayer(locMarkers[key]))locMarkers[key].addTo(map);
     if(!visible&&map.hasLayer(locMarkers[key]))map.removeLayer(locMarkers[key]);
   }else{
     const marker=L.marker([ps[0].lat,ps[0].lng],{icon:makeIcon(ps,brand)});
-    // Check radius BEFORE binding popup — intercept click entirely if nearby photos exist
-    marker.on('click',function(e){
-      // Use unfiltered count for threshold — so dense areas always trigger panel
+    marker.bindPopup(()=>buildPopup(getPhotosAtLoc(key)),{maxWidth:280,minWidth:250});
+    // When popup opens, check if we should show side panel instead
+    marker.on('popupopen',function(){
       const nearbyAll=getPhotosNearbyAll(ps[0].lat,ps[0].lng,50);
       if(nearbyAll.length>=5){
-        // 5+ photos within 50m — open side panel with all nearby
-        L.DomEvent.stopPropagation(e);
         map.closePopup();
         openNearbyPanel(ps[0].lat,ps[0].lng,50);
-      }else{
-        // Normal popup for isolated pins
-        marker.openPopup();
       }
     });
-    marker.bindPopup(()=>buildPopup(getPhotosAtLoc(key)),{maxWidth:280,minWidth:250});
     if(visible)marker.addTo(map);
     locMarkers[key]=marker;
   }
