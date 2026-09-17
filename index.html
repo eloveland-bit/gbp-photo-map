@@ -257,6 +257,24 @@
   .btn-dup-keep{width:100%;font-size:12px;padding:5px;border-radius:6px;background:var(--green);color:#fff;border:none;cursor:pointer;font-family:var(--font);}
   .btn-dup-keep:hover{background:#2d5509;}
   .btn-dup-skip-pair{width:100%;font-size:11px;padding:4px;border-radius:6px;background:var(--bg-primary);color:var(--text-secondary);border:0.5px solid var(--border-mid);cursor:pointer;font-family:var(--font);margin-top:8px;}
+  /* Nearby photo side panel */
+  #nearby-panel{position:fixed;top:0;left:-380px;width:360px;height:100vh;background:var(--bg-primary);border-right:0.5px solid var(--border-mid);z-index:1000;transition:left 0.3s ease;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,0.1);}
+  #nearby-panel.open{left:0;}
+  #nearby-panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:0.5px solid var(--border-light);flex-shrink:0;background:var(--bg-secondary);}
+  #nearby-panel-title{font-size:14px;font-weight:500;color:var(--text-primary);}
+  #nearby-panel-count{font-size:12px;color:var(--text-tertiary);font-weight:400;}
+  #nearby-panel-close{background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:18px;padding:4px;line-height:1;}
+  #nearby-panel-body{flex:1;overflow-y:auto;padding:8px;}
+  .nearby-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:var(--radius-md);margin-bottom:4px;cursor:pointer;transition:background 0.1s;}
+  .nearby-item:hover{background:var(--bg-secondary);}
+  .nearby-item-thumb{width:56px;height:56px;object-fit:cover;border-radius:6px;flex-shrink:0;}
+  .nearby-item-thumb-ph{width:56px;height:56px;background:var(--bg-tertiary);border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px;}
+  .nearby-item-info{flex:1;min-width:0;}
+  .nearby-item-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-primary);}
+  .nearby-item-sub{font-size:11px;color:var(--text-tertiary);margin-top:2px;}
+  .nearby-item-badge{font-size:10px;padding:1px 6px;border-radius:8px;color:#fff;display:inline-block;margin-top:3px;}
+  .nearby-item-btns{display:flex;flex-direction:column;gap:3px;flex-shrink:0;}
+  .nearby-item-btn{font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;color:#fff;font-family:var(--font);}
   /* Review panel */
   #review-panel{position:fixed;top:0;right:-400px;width:380px;height:100vh;background:var(--bg-primary);border-left:0.5px solid var(--border-mid);z-index:1000;transition:right 0.3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.1);}
   #review-panel.open{right:0;}
@@ -531,6 +549,18 @@
     <button id="market-stats-close" onclick="toggleMarketStats()"><i class="ti ti-x"></i></button>
   </div>
   <div id="market-stats-body"></div>
+</div>
+
+<!-- Nearby photo side panel -->
+<div id="nearby-panel">
+  <div id="nearby-panel-header">
+    <div>
+      <div id="nearby-panel-title">Photos in this area</div>
+      <div id="nearby-panel-count"></div>
+    </div>
+    <button id="nearby-panel-close" onclick="closeNearbyPanel()"><i class="ti ti-x"></i></button>
+  </div>
+  <div id="nearby-panel-body"></div>
 </div>
 
 <!-- Review panel -->
@@ -1199,12 +1229,13 @@ function rebuildLocMarker(key){
     // Check radius BEFORE binding popup — intercept click entirely if nearby photos exist
     marker.on('click',function(e){
       const nearby=getPhotosNearby(ps[0].lat,ps[0].lng,50);
-      if(nearby.length>2){
+      if(nearby.length>=20){
+        // 20+ photos within 50m — open side panel
         L.DomEvent.stopPropagation(e);
         map.closePopup();
-        showNearbyList(ps[0].lat,ps[0].lng,50);
+        openNearbyPanel(ps[0].lat,ps[0].lng,50);
       }else{
-        // Open normal popup
+        // Normal popup for isolated pins
         marker.openPopup();
       }
     });
@@ -3727,113 +3758,93 @@ function getPhotosNearby(lat,lng,radiusMeters){
   });
 }
 
-// Show radius-based list popup
-function showNearbyList(lat,lng,radiusMeters){
+
+// Nearby side panel
+function openNearbyPanel(lat,lng,radiusMeters){
   const nearby=getPhotosNearby(lat,lng,radiusMeters);
-  if(nearby.length<=1)return false; // let normal popup handle single pin
-  const wrap=document.createElement('div');
-  wrap.style.cssText='max-height:320px;overflow-y:auto;width:270px;';
-  const title=document.createElement('div');
-  title.style.cssText='font-size:12px;font-weight:600;margin-bottom:4px;color:#6b6b67;padding-bottom:6px;border-bottom:0.5px solid rgba(0,0,0,0.1);';
-  title.textContent=nearby.length+' photos within '+radiusMeters+'m';
-  wrap.appendChild(title);
-  const hint=document.createElement('div');
-  hint.style.cssText='font-size:10px;color:#9b9b97;margin-bottom:8px;';
-  hint.textContent='Tap a row to open photo details · ↓ download · ✓ mark used';
-  wrap.appendChild(hint);
+  if(!nearby.length)return;
+  const panel=document.getElementById('nearby-panel');
+  const body=document.getElementById('nearby-panel-body');
+  const countEl=document.getElementById('nearby-panel-count');
+  if(!panel||!body)return;
+  countEl.textContent=nearby.length+' photos within '+radiusMeters+'m';
+  body.innerHTML='';
+  // Sort by distance
+  nearby.sort((a,b)=>gpsDistance(lat,lng,a.lat,a.lng)-gpsDistance(lat,lng,b.lat,b.lng));
   nearby.forEach(function(p){
-    const row=document.createElement('div');
-    row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid rgba(0,0,0,0.06);cursor:pointer;';
-    // Thumb — click opens full popup
+    const item=document.createElement('div');
+    item.className='nearby-item';
+    // Thumb
     if(p.thumb&&p.thumb!=='video'){
       const img=document.createElement('img');
-      img.src=p.thumb;
-      img.style.cssText='width:48px;height:48px;object-fit:cover;border-radius:5px;flex-shrink:0;cursor:pointer;';
-      img.title='Click to open full details';
-    img.onclick=function(){
-      map.closePopup();
-      // Build and show a direct popup for this specific photo
-      const content=document.createElement('div');
-      content.innerHTML=buildPhotoCard(p);
-      L.popup({maxWidth:280,minWidth:250})
-        .setLatLng([p.lat,p.lng])
-        .setContent(content)
-        .openOn(map);
-      map.setView([p.lat,p.lng],17,{animate:true});
-    };
-      row.appendChild(img);
+      img.src=p.thumb;img.className='nearby-item-thumb';img.alt=p.name;
+      item.appendChild(img);
     }else{
       const ph=document.createElement('div');
-      ph.style.cssText='width:48px;height:48px;background:#eee;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;';
+      ph.className='nearby-item-thumb-ph';
       ph.textContent=p.thumb==='video'?'▶':'📷';
-      ph.onclick=function(){
-        map.closePopup();
-        const content=document.createElement('div');
-        content.innerHTML=buildPhotoCard(p);
-        L.popup({maxWidth:280,minWidth:250})
-          .setLatLng([p.lat,p.lng])
-          .setContent(content)
-          .openOn(map);
-        map.setView([p.lat,p.lng],17,{animate:true});
-      };
-      row.appendChild(ph);
+      item.appendChild(ph);
     }
     // Info
     const info=document.createElement('div');
-    info.style.cssText='flex:1;min-width:0;';
+    info.className='nearby-item-info';
     const name=document.createElement('div');
-    name.style.cssText='font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-    name.textContent=p.name;
+    name.className='nearby-item-name';name.textContent=p.name;
     const sub=document.createElement('div');
-    sub.style.cssText='font-size:10px;color:#9b9b97;margin-top:1px;';
+    sub.className='nearby-item-sub';
     const dist=Math.round(gpsDistance(lat,lng,p.lat,p.lng));
-    sub.textContent=(brandLabels[p.brand]||p.brand||'')+' · '+dist+'m away'+(p.desc?' · '+p.desc.slice(0,20):'');
-    info.appendChild(name);info.appendChild(sub);
-    row.appendChild(info);
+    sub.textContent=dist+'m away'+(p.desc?' · '+p.desc.slice(0,30):'');
+    const badge=document.createElement('span');
+    badge.className='nearby-item-badge';
+    badge.style.background=brandColors[p.brand]||'#444';
+    badge.textContent=brandLabels[p.brand]||p.brand;
+    info.appendChild(name);info.appendChild(sub);info.appendChild(badge);
+    item.appendChild(info);
     // Buttons
     const btns=document.createElement('div');
-    btns.style.cssText='display:flex;flex-direction:column;gap:3px;flex-shrink:0;';
-    // Open button — most important action
+    btns.className='nearby-item-btns';
+    // Open button
     const openBtn=document.createElement('button');
+    openBtn.className='nearby-item-btn';
+    openBtn.style.background='#555';
     openBtn.textContent='Open';
-    openBtn.title='Open full photo details';
-    openBtn.style.cssText='font-size:11px;padding:2px 7px;border-radius:4px;background:#555;color:#fff;border:none;cursor:pointer;';
     openBtn.onclick=function(ev){
       ev.stopPropagation();
-      map.closePopup();
-      const content=document.createElement('div');
-      content.innerHTML=buildPhotoCard(p);
+      closeNearbyPanel();
+      const c=document.createElement('div');
+      c.innerHTML=buildPhotoCard(p);
       L.popup({maxWidth:280,minWidth:250})
         .setLatLng([p.lat,p.lng])
-        .setContent(content)
+        .setContent(c)
         .openOn(map);
       map.setView([p.lat,p.lng],17,{animate:false});
     };
     btns.appendChild(openBtn);
     if(p.driveId){
       const dl=document.createElement('button');
-      dl.textContent='↓';
-      dl.title='Download';
-      dl.style.cssText='font-size:11px;padding:2px 7px;border-radius:4px;background:#185FA5;color:#fff;border:none;cursor:pointer;';
+      dl.className='nearby-item-btn';
+      dl.style.background='#185FA5';
+      dl.textContent='↓';dl.title='Download';
       dl.onclick=function(ev){ev.stopPropagation();downloadPhoto(p.id);};
       btns.appendChild(dl);
     }
     if(!p.used){
       const mu=document.createElement('button');
-      mu.textContent='✓';
-      mu.title='Mark used';
-      mu.style.cssText='font-size:11px;padding:2px 7px;border-radius:4px;background:#3B6D11;color:#fff;border:none;cursor:pointer;';
-      mu.onclick=function(ev){ev.stopPropagation();markUsed(p.id);map.closePopup();};
+      mu.className='nearby-item-btn';
+      mu.style.background='#3B6D11';
+      mu.textContent='✓';mu.title='Mark used';
+      mu.onclick=function(ev){ev.stopPropagation();markUsed(p.id);mu.style.opacity='0.4';mu.disabled=true;};
       btns.appendChild(mu);
     }
-    row.appendChild(btns);
-    wrap.appendChild(row);
+    item.appendChild(btns);
+    body.appendChild(item);
   });
-  L.popup({maxWidth:300,minWidth:270})
-    .setLatLng([lat,lng])
-    .setContent(wrap)
-    .openOn(map);
-  return true;
+  panel.classList.add('open');
+}
+
+function closeNearbyPanel(){
+  const panel=document.getElementById('nearby-panel');
+  if(panel)panel.classList.remove('open');
 }
 
 loadConfig();load();loadPickerApi();
