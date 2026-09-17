@@ -3809,17 +3809,18 @@ function openNearbyPanel(lat,lng,radiusMeters){
     badge.textContent=brandLabels[p.brand]||p.brand;
     info.appendChild(name);info.appendChild(sub);info.appendChild(badge);
     item.appendChild(info);
+    // Brand dropdown + action buttons
+    const right=document.createElement('div');
+    right.style.cssText='display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:flex-end;';
     // Brand dropdown
     const sel=document.createElement('select');
-    sel.style.cssText='font-size:11px;padding:3px 5px;border-radius:5px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);font-family:var(--font);cursor:pointer;max-width:110px;';
-    // Built-in brands
+    sel.style.cssText='font-size:11px;padding:3px 5px;border-radius:5px;border:0.5px solid var(--border-mid);background:var(--bg-primary);color:var(--text-primary);font-family:var(--font);cursor:pointer;max-width:120px;';
     [['mosquito','Mosquito Squad'],['lawn','Lawn Squad'],['newage','New Age Lights']].forEach(function(b){
       const opt=document.createElement('option');
       opt.value=b[0];opt.textContent=b[1];
       if(p.brand===b[0])opt.selected=true;
       sel.appendChild(opt);
     });
-    // Custom companies
     companies.forEach(function(co){
       const opt=document.createElement('option');
       opt.value=co.id;opt.textContent=co.name;
@@ -3831,11 +3832,39 @@ function openNearbyPanel(lat,lng,radiusMeters){
       p.brand=sel.value;
       save();if(oauthToken)saveToDrive();
       rebuildLocMarker(oldKey);
-      // Update badge color
       badge.style.background=brandColors[p.brand]||'#444';
       badge.textContent=brandLabels[p.brand]||p.brand;
     };
-    item.appendChild(sel);
+    right.appendChild(sel);
+    // Action buttons row
+    const btnRow=document.createElement('div');
+    btnRow.style.cssText='display:flex;gap:4px;';
+    // Open
+    const openBtn=document.createElement('button');
+    openBtn.className='nearby-item-btn';openBtn.style.background='#555';openBtn.textContent='Open';
+    openBtn.onclick=function(ev){
+      ev.stopPropagation();closeNearbyPanel();
+      const c=document.createElement('div');c.innerHTML=buildPhotoCard(p);
+      L.popup({maxWidth:280,minWidth:250}).setLatLng([p.lat,p.lng]).setContent(c).openOn(map);
+      map.setView([p.lat,p.lng],17,{animate:false});
+    };
+    btnRow.appendChild(openBtn);
+    // Download
+    if(p.driveId){
+      const dl=document.createElement('button');
+      dl.className='nearby-item-btn';dl.style.background='#185FA5';dl.textContent='↓';dl.title='Download';
+      dl.onclick=function(ev){ev.stopPropagation();downloadPhoto(p.id);};
+      btnRow.appendChild(dl);
+    }
+    // Mark used
+    if(!p.used){
+      const mu=document.createElement('button');
+      mu.className='nearby-item-btn';mu.style.background='#3B6D11';mu.textContent='✓';mu.title='Mark used';
+      mu.onclick=function(ev){ev.stopPropagation();markUsed(p.id);mu.style.opacity='0.4';mu.disabled=true;};
+      btnRow.appendChild(mu);
+    }
+    right.appendChild(btnRow);
+    item.appendChild(right);
     body.appendChild(item);
   });
   panel.classList.add('open');
