@@ -3855,7 +3855,9 @@ function openNearbyPanel(lat,lng,radiusMeters){
       const oldKey=locKey(p);
       p.brand=sel.value;
       save();if(oauthToken)saveToDrive();
-      rebuildLocMarker(oldKey);
+      // Update pin on map silently — don't close panel
+      setTimeout(()=>rebuildAllMarkersWithProximity(),100);
+      // Update badge in panel immediately
       badge.style.background=brandColors[p.brand]||'#444';
       badge.textContent=brandLabels[p.brand]||p.brand;
     };
@@ -3884,7 +3886,15 @@ function openNearbyPanel(lat,lng,radiusMeters){
     if(!p.used){
       const mu=document.createElement('button');
       mu.className='nearby-item-btn';mu.style.background='#3B6D11';mu.textContent='✓';mu.title='Mark used';
-      mu.onclick=function(ev){ev.stopPropagation();markUsed(p.id);mu.style.opacity='0.4';mu.disabled=true;};
+      mu.onclick=function(ev){
+        ev.stopPropagation();
+        const key=locKey(p);
+        p.used=true;
+        save();if(oauthToken)saveToDrive();
+        setTimeout(()=>rebuildAllMarkersWithProximity(),100);
+        mu.style.opacity='0.4';mu.disabled=true;
+        mu.textContent='Used';
+      };
       btnRow.appendChild(mu);
     }
     right.appendChild(btnRow);
