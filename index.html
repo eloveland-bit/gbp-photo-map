@@ -2342,14 +2342,16 @@ window.changeBrand=function(id,newBrand){
   p.brand=newBrand;
   save();
   if(oauthToken)saveToDrive();
-  // Update just the brand badge in the open popup — no rebuild, no scroll reset
+  // Update badge in popup in-place — no marker rebuild, no scroll reset
   const badge=document.querySelector(`.popup-brand-badge[data-id="${id}"]`);
   if(badge){
     badge.style.background=brandColors[newBrand]||'#444';
     badge.textContent=brandLabels[newBrand]||newBrand;
   }
-  // Update map pin in background after a delay
-  setTimeout(()=>rebuildAllMarkersWithProximity(),500);
+  // Schedule silent rebuild only AFTER popup closes
+  map.once('popupclose',function(){
+    rebuildAllMarkersWithProximity();
+  });
   toast('Brand updated.');
 };
 
