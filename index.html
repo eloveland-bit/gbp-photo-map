@@ -1209,23 +1209,27 @@ function rebuildLocMarker(key){
 // Group photos within 50m radius into a single pin location
 // Returns a map of canonical lat/lng key -> array of photo IDs
 function buildProximityGroups(){
-  const RADIUS=50; // meters
+  const RADIUS=50;
   const assigned=new Set();
-  const groups=[]; // [{lat,lng,ids:[]}]
-  photos.forEach(p=>{
+  const groups=[];
+  // Only group photos that pass current filters
+  const filtered=photos.filter(p=>
+    p.lat&&p.lng&&
+    (activeBrand==='all'||p.brand===activeBrand)&&
+    (showUsed||!p.used)&&
+    isWithinDateFilter(p)&&
+    (activeCategory==='all'||p.category===activeCategory)
+  );
+  filtered.forEach(p=>{
     if(assigned.has(p.id))return;
-    if(!p.lat||!p.lng)return;
-    // Find all photos within radius
-    const nearby=photos.filter(q=>
-      !assigned.has(q.id)&&q.lat&&q.lng&&
+    const nearby=filtered.filter(q=>
+      !assigned.has(q.id)&&
       gpsDistance(p.lat,p.lng,q.lat,q.lng)<=RADIUS
     );
     if(!nearby.length)return;
-    // Use centroid as pin location
     const avgLat=nearby.reduce((s,q)=>s+parseFloat(q.lat),0)/nearby.length;
     const avgLng=nearby.reduce((s,q)=>s+parseFloat(q.lng),0)/nearby.length;
-    const group={lat:avgLat,lng:avgLng,ids:nearby.map(q=>q.id)};
-    groups.push(group);
+    groups.push({lat:avgLat,lng:avgLng,ids:nearby.map(q=>q.id)});
     nearby.forEach(q=>assigned.add(q.id));
   });
   return groups;
