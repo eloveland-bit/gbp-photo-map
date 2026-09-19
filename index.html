@@ -716,6 +716,8 @@ let suggestTimers={};
 let config={clientId:'788046954081-1ojin1jscuit4vujd76qcinm3hjsgiq4.apps.googleusercontent.com',domain:'eloveland-bit.github.io'};
 const isTechMode=new URLSearchParams(window.location.search).has('upload');
 const isViewMode=new URLSearchParams(window.location.search).has('view');
+// Filtered view: ?view&brand=mosquito locks to one brand
+const viewBrandParam=new URLSearchParams(window.location.search).get('brand')||null;
 if(isTechMode)document.body.classList.add('tech-mode');
 if(isViewMode)document.body.classList.add('view-mode');
 
@@ -4006,10 +4008,27 @@ async function loadPublicDriveData(){
     if(!resp.ok)throw new Error('Fetch failed: '+resp.status);
     const data=await resp.json();
     if(!data.photos||!data.photos.length)throw new Error('No photos in data');
-    // Clear and reload with full dataset
+    // Clear and reload
     Object.keys(locMarkers).forEach(k=>{map.removeLayer(locMarkers[k]);});
     locMarkers={};markers={};
-    photos=data.photos;
+    // Filter by brand param if set
+    photos=viewBrandParam
+      ?data.photos.filter(p=>p.brand===viewBrandParam)
+      :data.photos;
+    // Lock activeBrand if brand param set
+    if(viewBrandParam){
+      activeBrand=viewBrandParam;
+      // Hide brand filter buttons — not needed when locked to one brand
+      document.querySelectorAll('.filter-btn').forEach(b=>{
+        if(b.dataset.brand!==viewBrandParam&&b.dataset.brand!=='all')b.style.display='none';
+      });
+      // Update page title to show which brand
+      const brandNames={mosquito:'Mosquito Squad',lawn:'Lawn Squad',newage:'New Age Lights'};
+      document.title='GBP Photos — '+(brandNames[viewBrandParam]||viewBrandParam);
+      // Update view banner
+      const titleEl=document.getElementById('nearby-panel-title');
+      const bannerSpan=document.querySelector('#view-banner span');
+    }
     rebuildAllMarkersWithProximity();
     // Cache for next time
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify(photos));}catch(e){}
