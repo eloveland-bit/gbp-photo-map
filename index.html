@@ -932,6 +932,24 @@ async function loadFromDrive(){
       });
     });
     photos = [...mergedPhotos, ...localOnly];
+
+    // Content Planner link: photos marked posted in the planner get marked used here
+    let plannerMarked = 0;
+    try {
+      const q = encodeURIComponent("name='content-planner-photo-uses.json' and trashed=false");
+      const fr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&orderBy=modifiedTime%20desc&pageSize=1`, {
+        headers:{Authorization:`Bearer ${oauthToken}`}
+      });
+      const fj = fr.ok ? await fr.json() : {};
+      const fid = (fj.files||[])[0] && fj.files[0].id;
+      if (fid) {
+        const ur = await fetch(`https://www.googleapis.com/drive/v3/files/${fid}?alt=media`, {headers:{Authorization:`Bearer ${oauthToken}`}});
+        const uj = ur.ok ? await ur.json() : {};
+        const usedIds = new Set(Object.keys((uj && uj.used) || {}));
+        photos.forEach(p => { if (!p.used && usedIds.has(p.id)) { p.used = true; plannerMarked++; } });
+      }
+    } catch(e) {}
+
     pending = [...filteredDrivePending, ...localPendingOnly];
     techReview = [...driveTechReview, ...localTechReviewOnly];
     rebuildAllMarkersWithProximity();
@@ -940,7 +958,7 @@ async function loadFromDrive(){
     const driveHadDeletedItems = (data.pending||[]).length > filteredDrivePending.length ||
       (data.photos||[]).length > drivePhotos.length ||
       (data.techReview||[]).length > driveTechReview.length;
-    if(localOnly.length > 0 || localPendingOnly.length > 0 || localTechReviewOnly.length > 0 || driveHadDeletedItems){
+    if(localOnly.length > 0 || localPendingOnly.length > 0 || localTechReviewOnly.length > 0 || driveHadDeletedItems || plannerMarked > 0){
       await saveToDrive();
     }
 
