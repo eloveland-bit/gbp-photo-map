@@ -4042,16 +4042,22 @@ async function loadPublicDriveData(){
     // Lock activeBrand if brand param set
     if(viewBrandParam){
       activeBrand=viewBrandParam;
-      // Hide brand filter buttons — not needed when locked to one brand
-      document.querySelectorAll('.filter-btn').forEach(b=>{
-        if(b.dataset.brand!==viewBrandParam&&b.dataset.brand!=='all')b.style.display='none';
-      });
-      // Update page title to show which brand
+      // Hide entire brand filter group — no switching allowed on locked links
+      const brandGroup=document.getElementById('brand-filter-group');
+      if(brandGroup)brandGroup.style.display='none';
+      // Hide the add company button too
+      const companyBtn=document.querySelector('.icon-btn[onclick="showCompanyModal()"]');
+      if(companyBtn)companyBtn.style.display='none';
+      // Update page title
       const brandNames={mosquito:'Mosquito Squad',lawn:'Lawn Squad',newage:'New Age Lights'};
       document.title='GBP Photos — '+(brandNames[viewBrandParam]||viewBrandParam);
-      // Update view banner
-      const titleEl=document.getElementById('nearby-panel-title');
+      // Show which brand in the view banner
       const bannerSpan=document.querySelector('#view-banner span');
+      if(bannerSpan)bannerSpan.textContent='View only · '+(brandNames[viewBrandParam]||viewBrandParam);
+      // Hide category filter buttons and date filter from toolbar
+      document.querySelectorAll('.cat-btn').forEach(b=>b.style.display='none');
+      const dateFilter=document.querySelector('#date-filter')?.parentElement;
+      if(dateFilter)dateFilter.style.display='none';
     }
     rebuildAllMarkersWithProximity();
     // Cache for next time
