@@ -619,6 +619,7 @@
     <div class="spinner"></div>
     <p id="loading-msg">Uploading to Drive...</p>
     <p id="loading-progress"></p>
+    <button id="loading-cancel-btn" style="display:none;margin-top:14px;font-size:12px;padding:5px 14px;border-radius:6px;border:1px solid var(--border-mid);background:var(--bg-secondary);color:var(--text-secondary);cursor:pointer;" onclick="cancelUploadBatch()">Cancel upload</button>
   </div>
 </div>
 
@@ -747,13 +748,27 @@ function toast(msg){
   document.body.appendChild(el);
   setTimeout(()=>{el.classList.add('fade');setTimeout(()=>el.remove(),400);},2800);
 }
-function showLoading(msg,progress){
+let _uploadCancelled=false;
+function showLoading(msg,progress,showCancel=false){
   document.getElementById('loading-msg').textContent=msg||'Loading...';
   document.getElementById('loading-progress').textContent=progress||'';
   document.getElementById('loading-overlay').style.display='flex';
+  const cancelBtn=document.getElementById('loading-cancel-btn');
+  if(cancelBtn){cancelBtn.style.display=showCancel?'inline-block':'none';}
+  _uploadCancelled=false;
+}
+function cancelUploadBatch(){
+  _uploadCancelled=true;
+  document.getElementById('loading-cancel-btn').style.display='none';
+  updateLoadingProgress('Cancelling after current file...');
 }
 function updateLoadingProgress(text){document.getElementById('loading-progress').textContent=text;}
-function hideLoading(){document.getElementById('loading-overlay').style.display='none';}
+function hideLoading(){
+  document.getElementById('loading-overlay').style.display='none';
+  const cancelBtn=document.getElementById('loading-cancel-btn');
+  if(cancelBtn)cancelBtn.style.display='none';
+  _uploadCancelled=false;
+}
 
 // Serialize current state
 function getStateData(){
@@ -1584,12 +1599,19 @@ async function uploadFileToDrive(file,folderId){
   const form=new FormData();
   form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
   form.append('file',file);
-  const resp=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name&supportsAllDrives=true',{
-    method:'POST',
-    headers:{Authorization:`Bearer ${oauthToken}`},
-    body:form
-  });
-  if(!resp.ok)throw new Error('Upload failed');
+  // 90-second timeout per file — prevents spinner from hanging if Drive API stalls
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),90000);
+  let resp;
+  try{
+    resp=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name&supportsAllDrives=true',{
+      method:'POST',
+      headers:{Authorization:`Bearer ${oauthToken}`},
+      body:form,
+      signal:controller.signal
+    });
+  }finally{clearTimeout(timeout);}
+  if(!resp.ok)throw new Error(`Upload failed: ${resp.status}`);
   return await resp.json();
 }
 
@@ -1761,18 +1783,21 @@ async function getOrCreateSubFolder(brand, market) {
 async function processUploadFiles(files){
   if(!files.length)return;
   ensureAuth(async()=>{
-    showLoading(`Uploading to Drive...`,`0 of ${files.length}`);
+    showLoading(`Uploading to Drive...`,`0 of ${files.length}`,files.length>1);
     let folderId;
     try{folderId=await getOrCreateFolder();}
     catch(e){hideLoading();toast('Could not access Drive folder.');return;}
-    let added=0,noGps=0,failed=0;
+    let added=0,noGps=0,failed=0,cancelled=0;
     for(let i=0;i<files.length;i++){
+      if(_uploadCancelled){cancelled=files.length-i;break;}
       const file=files[i];
       const isVideo=file.type.startsWith('video/');
-      updateLoadingProgress(`${i+1} of ${files.length} — ${file.name}`);
+      updateLoadingProgress(`${i+1} of ${files.length} — reading ${file.name}`);
       try{
         const thumb=isVideo?'video':await getThumb(file);
+        updateLoadingProgress(`${i+1} of ${files.length} — reading GPS from ${file.name}`);
         const coords=isVideo?null:await extractEXIF(file);
+        updateLoadingProgress(`${i+1} of ${files.length} — hashing ${file.name}`);
         const hash=isVideo?null:await perceptualHash(file);
         // Duplicate check — skip for videos
         if(!isVideo&&hash){
@@ -1780,10 +1805,11 @@ async function processUploadFiles(files){
           if(dupMatch){
             hideLoading();
             const proceed=await confirmDuplicate(dupMatch,thumb);
-            showLoading(`Uploading to Drive...`,`${i+1} of ${files.length}`);
+            showLoading(`Uploading to Drive...`,`${i+1} of ${files.length}`,files.length>1);
             if(!proceed)continue;
           }
         }
+        updateLoadingProgress(`${i+1} of ${files.length} — uploading ${file.name} to Drive...`);
         const brand=guessBrand(file.name);
         const id=Date.now()+Math.random().toString(36).slice(2);
         // Determine target folder — subfolder if GPS known, root folder otherwise
@@ -1810,7 +1836,15 @@ async function processUploadFiles(files){
           pending.push({id,name:file.name,brand,thumb,hash,driveId:driveFile.id});
           noGps++;
         }
-      }catch(e){console.error('Failed:',file.name,e);failed++;}
+      }catch(e){
+        console.error('Failed:',file.name,e);
+        failed++;
+        // If the error looks like a timeout/abort, show it in progress so user knows
+        if(e.name==='AbortError'){
+          updateLoadingProgress(`${i+1} of ${files.length} — timed out on ${file.name}, continuing...`);
+          await new Promise(r=>setTimeout(r,1200)); // brief pause so they can read it
+        }
+      }
     }
     save();
     if(added>0){
@@ -1821,6 +1855,7 @@ async function processUploadFiles(files){
     let msg=`Uploaded ${added+noGps} to Drive, pinned ${added}`;
     if(noGps>0)msg+=` · ${noGps} need manual location`;
     if(failed>0)msg+=` · ${failed} failed`;
+    if(cancelled>0)msg+=` · ${cancelled} cancelled`;
     toast(msg);
   });
 }
