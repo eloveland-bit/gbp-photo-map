@@ -781,14 +781,26 @@ function getStateData(){
 }
 
 // Save to Drive (debounced 1.5s so rapid changes batch together)
+// Strip thumbnails for localStorage — they're base64 blobs that eat quota fast.
+// Drive JSON is the source of truth for thumbs; local cache only needs coords/meta.
+function stripThumbsForCache(arr){
+  return arr.map(p=>{
+    if(!p.thumb||p.thumb==='video')return p;
+    const {thumb,...rest}=p; // eslint-disable-line no-unused-vars
+    return rest;
+  });
+}
 function save(){
-  // Always cache locally immediately
+  // Always cache locally immediately — without thumbnails to avoid 5MB quota limit
   try{
     const d=getStateData();
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(d.photos));
-    localStorage.setItem(PENDING_KEY,JSON.stringify(d.pending));
-    localStorage.setItem('gbp_tech_review',JSON.stringify(d.techReview));
-  }catch(e){}
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(stripThumbsForCache(d.photos)));
+    localStorage.setItem(PENDING_KEY,JSON.stringify(stripThumbsForCache(d.pending)));
+    localStorage.setItem('gbp_tech_review',JSON.stringify(stripThumbsForCache(d.techReview)));
+  }catch(e){
+    // If still too large, just skip local cache — Drive is source of truth
+    console.warn('localStorage save failed (quota?):',e);
+  }
   // Debounce Drive save
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>saveToDrive(),1500);
@@ -851,7 +863,13 @@ async function load(){
     const r=localStorage.getItem(STORAGE_KEY);
     const rp=localStorage.getItem(PENDING_KEY);
     const rr=localStorage.getItem('gbp_tech_review');
-    if(r){photos=JSON.parse(r);photos.forEach(p=>addMarker(p));}
+    if(r){
+      photos=JSON.parse(r);
+      // Register markers lookup table without touching the DOM yet —
+      // rebuildAllMarkersWithProximity (called once after) handles visual pins
+      photos.forEach(p=>{markers[p.id]=true;});
+      rebuildAllMarkersWithProximity();
+    }
     if(rp){pending=JSON.parse(rp);renderPendingPanel();}
     if(rr){techReview=JSON.parse(rr);}
   }catch(e){}
@@ -1453,9 +1471,7 @@ window.removePhoto=async function(id){
   delete markers[id];
   photos.splice(idx,1);
   rebuildLocMarker(key);
-  // Save to localStorage immediately
-  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(photos.map(ph=>({id:ph.id,name:ph.name,lat:ph.lat,lng:ph.lng,brand:ph.brand,used:ph.used,thumb:ph.thumb,hash:ph.hash||null,desc:ph.desc||null,manual:ph.manual||false,driveId:ph.driveId||null}))));}catch(e){}
-  save();
+  save(); // handles localStorage (strips thumbs) + debounced Drive save
   // Await Drive save so sync can't overwrite before it completes
   if(oauthToken)await saveToDrive();
   updateStats();map.closePopup();
@@ -1640,10 +1656,12 @@ function getThumb(file){
       const img=new Image();
       img.onload=()=>{
         const canvas=document.createElement('canvas');
-        const ratio=Math.min(300/img.width,300/img.height,1);
+        // 150px max, quality 0.4 — keeps thumbs ~3-5KB vs 20-40KB at 300/0.7
+        // Popup shows them small anyway; full image available via lightbox/download
+        const ratio=Math.min(150/img.width,150/img.height,1);
         canvas.width=Math.round(img.width*ratio);canvas.height=Math.round(img.height*ratio);
         canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
-        resolve(canvas.toDataURL('image/jpeg',0.7));
+        resolve(canvas.toDataURL('image/jpeg',0.4));
       };
       img.src=e.target.result;
     };
@@ -2343,12 +2361,7 @@ function pinPendingWith(id,coords,brand){
   const photo={id:p.id,name:p.name,lat:coords.lat,lng:coords.lng,brand,used:false,thumb:p.thumb,driveId:p.driveId||null,manual:true,pinnedAt:new Date().toISOString()};
   photos.push(photo);pending.splice(pIdx,1);
   addMarker(photo);map.setView([coords.lat,coords.lng],14);
-  // Update localStorage immediately so sync can't restore the old pending list
-  try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(photos.map(p=>({id:p.id,name:p.name,lat:p.lat,lng:p.lng,brand:p.brand,used:p.used,thumb:p.thumb,hash:p.hash||null,desc:p.desc||null,manual:p.manual||false,driveId:p.driveId||null}))));
-    localStorage.setItem(PENDING_KEY,JSON.stringify(pending));
-  }catch(e){}
-  save();
+  save(); // handles localStorage (strips thumbs) + debounced Drive save
   // Force immediate Drive save so pin survives a sync
   if(oauthToken)saveToDrive();
   // Write GPS EXIF into the Drive file in the background
@@ -2509,11 +2522,7 @@ window.saveLocation=async function(id){
   // Update market
   const newMarket=detectMarket(coords.lat,coords.lng);
   if(newMarket)p.market=newMarket;
-  // Save
-  try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(photos.map(ph=>({id:ph.id,name:ph.name,lat:ph.lat,lng:ph.lng,brand:ph.brand,used:ph.used,thumb:ph.thumb,hash:ph.hash||null,desc:ph.desc||null,manual:true,driveId:ph.driveId||null,acceptedAt:ph.acceptedAt||null,geotagged:ph.geotagged||false}))));
-  }catch(e){}
-  save();
+  save(); // handles localStorage (strips thumbs) + debounced Drive save
   if(oauthToken){
     saveToDrive();
     // Geotag the Drive file with new coords
