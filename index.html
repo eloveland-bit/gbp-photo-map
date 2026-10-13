@@ -844,7 +844,7 @@ async function load(){
   // Then load from Drive once signed in (called after auth)
 }
 
-async function loadFromDrive(){
+async function loadFromDrive(backgroundSync=false){
   try{
     const folderId=await getOrCreateFolder();
     // Check cached file ID first
@@ -934,7 +934,9 @@ async function loadFromDrive(){
     photos = [...mergedPhotos, ...localOnly];
 
     // Content Planner link: photos marked posted in the planner get marked used here
+    // Skip during background auto-sync to reduce Drive API calls — runs on manual Sync only
     let plannerMarked = 0;
+    if (!backgroundSync) {
     try {
       const q = encodeURIComponent("name='content-planner-photo-uses.json' and trashed=false");
       const fr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&orderBy=modifiedTime%20desc&pageSize=1`, {
@@ -949,6 +951,7 @@ async function loadFromDrive(){
         photos.forEach(p => { if (!p.used && usedIds.has(p.id)) { p.used = true; plannerMarked++; } });
       }
     } catch(e) {}
+    }
 
     pending = [...filteredDrivePending, ...localPendingOnly];
     techReview = [...driveTechReview, ...localTechReviewOnly];
@@ -1227,7 +1230,7 @@ function rebuildLocMarker(key){
 // Group photos within 50m radius into a single pin location
 // Returns a map of canonical lat/lng key -> array of photo IDs
 function buildProximityGroups(){
-  const RADIUS=50;
+  const RADIUS=50; // meters
   const assigned=new Set();
   const groups=[];
   // Only group photos that pass current filters
@@ -1238,9 +1241,29 @@ function buildProximityGroups(){
     isWithinDateFilter(p)&&
     (activeCategory==='all'||p.category===activeCategory)
   );
+
+  // Spatial grid index — bucket photos into ~100m cells to avoid O(n²) full scan
+  // 50m RADIUS → check 3x3 grid of 100m cells around each photo (covers full 50m reach)
+  const CELL_DEG = 0.001; // ~111m lat, ~85-111m lng at mid-latitudes — safe for 50m radius
+  const grid = new Map();
+  const cellKey = (lat,lng) => `${Math.floor(parseFloat(lat)/CELL_DEG)},${Math.floor(parseFloat(lng)/CELL_DEG)}`;
+  filtered.forEach(p => {
+    const k = cellKey(p.lat, p.lng);
+    if (!grid.has(k)) grid.set(k, []);
+    grid.get(k).push(p);
+  });
+
   filtered.forEach(p=>{
     if(assigned.has(p.id))return;
-    const nearby=filtered.filter(q=>
+    // Only check neighbors in the 3x3 surrounding cells instead of all photos
+    const pLat=parseFloat(p.lat), pLng=parseFloat(p.lng);
+    const cx=Math.floor(pLat/CELL_DEG), cy=Math.floor(pLng/CELL_DEG);
+    const candidates=[];
+    for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++){
+      const bucket=grid.get(`${cx+dx},${cy+dy}`);
+      if(bucket) candidates.push(...bucket);
+    }
+    const nearby=candidates.filter(q=>
       !assigned.has(q.id)&&
       gpsDistance(p.lat,p.lng,q.lat,q.lng)<=RADIUS
     );
@@ -1259,7 +1282,25 @@ function getProximityKey(p){
   return _proximityCache[p.id]||locKey(p);
 }
 
+// Track what state the last proximity build used — skip rebuild if nothing changed
+let _lastProximityState='';
+function _proximityStateKey(){
+  // Fast hash: filters + photo count + a lightweight fingerprint of IDs
+  // Full ID join is O(n) string alloc; instead XOR the char codes of first 8 chars of each ID
+  let fingerprint=0;
+  for(let i=0;i<photos.length;i++){
+    const id=photos[i].id||'';
+    for(let j=0;j<Math.min(id.length,8);j++) fingerprint=(fingerprint*31+id.charCodeAt(j))>>>0;
+  }
+  return activeBrand+'|'+activeCategory+'|'+(showUsed?1:0)+'|'+activeDateFilter+'|'+photos.length+'|'+fingerprint;
+}
+
 function rebuildAllMarkersWithProximity(){
+  // Skip if nothing relevant changed (saves O(n²) distance calcs on every sync)
+  const stateKey=_proximityStateKey();
+  if(stateKey===_lastProximityState&&Object.keys(locMarkers).length>0)return;
+  _lastProximityState=stateKey;
+
   // Clear existing markers
   Object.keys(locMarkers).forEach(k=>{
     if(map.hasLayer(locMarkers[k]))map.removeLayer(locMarkers[k]);
@@ -4108,7 +4149,7 @@ function tryAutoSignIn(){
   }catch(e){}
 }
 
-// Auto-sync every 2 minutes while signed in
+// Auto-sync every 5 minutes while signed in
 let autoSyncInterval=null;
 function startAutoSync(){
   if(autoSyncInterval)return; // already running
@@ -4118,7 +4159,7 @@ function startAutoSync(){
     try{
       const prevReviewCount=techReview.length;
       const prevPhotoCount=photos.length;
-      await loadFromDrive();
+      await loadFromDrive(true); // true = background sync, skip expensive planner lookup
       // Show banner if new photos arrived in review queue
       if(techReview.length>prevReviewCount){
         const newest=[...techReview].sort((a,b)=>new Date(b.submittedAt||0)-new Date(a.submittedAt||0))[0];
@@ -4126,11 +4167,10 @@ function startAutoSync(){
       }
       // Refresh map if new approved photos arrived
       if(photos.length>prevPhotoCount){
-        const bounds=L.latLngBounds(photos.map(p=>[p.lat,p.lng]));
-        if(photos.length>prevPhotoCount)toast(`${photos.length-prevPhotoCount} new photo${photos.length-prevPhotoCount>1?'s':''} added to map.`);
+        toast(`${photos.length-prevPhotoCount} new photo${photos.length-prevPhotoCount>1?'s':''} added to map.`);
       }
     }catch(e){}
-  }, 2*60*1000); // 2 minutes
+  }, 5*60*1000); // 5 minutes
 }
 
 
